@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -12,6 +11,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {MiMoGaMe} from "./MiMoToken.sol";
 
 /**
  * @title BearHunterEcosystem
@@ -45,14 +45,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     // External contract interfaces
     IERC721 public bearNFT;  // Existing BEAR NFT contract
     IERC20 public btbToken;  // Existing BTB token contract
-    
-    // MiMo token implementation embedded in this contract
-    mapping(address => uint256) private _mimoBalances;
-    mapping(address => mapping(address => uint256)) private _mimoAllowances;
-    uint256 private _mimoTotalSupply;
-    string private constant _mimoName = "MiMo Game";
-    string private constant _mimoSymbol = "MiMo";
-    uint8 private constant _mimoDecimals = 18;
+    MiMoGaMe public mimoToken;  // MiMo token contract
     
     // Hunter struct to store hunter attributes
     struct Hunter {
@@ -150,15 +143,17 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     constructor(
         address _bearNFT,
         address _btbToken,
+        address _mimoToken,
         address _liquidityReceiver,
         address _feeReceiver,
         address initialOwner
     ) ERC721("Hunter", "HNTR") Ownable(initialOwner) {
-        if (_bearNFT == address(0) || _btbToken == address(0) ||
+        if (_bearNFT == address(0) || _btbToken == address(0) || _mimoToken == address(0) ||
             _liquidityReceiver == address(0) || _feeReceiver == address(0)) revert ZeroAddressNotAllowed();
         
         bearNFT = IERC721(_bearNFT);
         btbToken = IERC20(_btbToken);
+        mimoToken = MiMoGaMe(_mimoToken);
         liquidityReceiver = _liquidityReceiver;
         feeReceiver = _feeReceiver;
         
@@ -169,156 +164,71 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         swapPaused = false;
     }
     
-    // ========================== MIMO TOKEN FUNCTIONS ==========================
+    // ========================== MIMO TOKEN WRAPPER FUNCTIONS ==========================
     
     /**
-     * @dev Returns the name of the token
-     */
-    function mimoName() public pure returns (string memory) {
-        return _mimoName;
-    }
-    
-    /**
-     * @dev Returns the symbol of the token
-     */
-    function mimoSymbol() public pure returns (string memory) {
-        return _mimoSymbol;
-    }
-    
-    /**
-     * @dev Returns the decimals places of the token
-     */
-    function mimoDecimals() public pure returns (uint8) {
-        return _mimoDecimals;
-    }
-    
-    /**
-     * @dev Returns the amount of tokens in existence
-     */
-    function mimoTotalSupply() public view returns (uint256) {
-        return _mimoTotalSupply;
-    }
-    
-    /**
-     * @dev Returns the amount of tokens owned by `account`
-     */
-    function mimoBalanceOf(address account) public view returns (uint256) {
-        return _mimoBalances[account];
-    }
-    
-    /**
-     * @dev Moves `amount` tokens from the caller's account to `to`
-     */
-    function mimoTransfer(address to, uint256 amount) public returns (bool) {
-        address owner = msg.sender;
-        _mimoTransfer(owner, to, amount);
-        return true;
-    }
-    
-    /**
-     * @dev Returns the remaining number of tokens that `spender` will be allowed to spend
-     * on behalf of `owner`
-     */
-    function mimoAllowance(address owner, address spender) public view returns (uint256) {
-        return _mimoAllowances[owner][spender];
-    }
-    
-    /**
-     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens
-     */
-    function mimoApprove(address spender, uint256 amount) public returns (bool) {
-        address owner = msg.sender;
-        _mimoApprove(owner, spender, amount);
-        return true;
-    }
-    
-    /**
-     * @dev Moves `amount` tokens from `from` to `to` using the allowance mechanism
-     */
-    function mimoTransferFrom(address from, address to, uint256 amount) public returns (bool) {
-        address spender = msg.sender;
-        _mimoSpendAllowance(from, spender, amount);
-        _mimoTransfer(from, to, amount);
-        return true;
-    }
-    
-    /**
-     * @dev Destroys `amount` tokens from the caller
-     */
-    function mimoBurn(uint256 amount) public {
-        _mimoBurn(msg.sender, amount);
-    }
-    
-    /**
-     * @dev Internal function to mint MiMo tokens
+     * @dev Wrapper for minting MiMo tokens
      */
     function _mimoMint(address account, uint256 amount) internal {
         if (account == address(0)) revert ZeroAddressNotAllowed();
         
-        _mimoTotalSupply += amount;
-        unchecked {
-            _mimoBalances[account] += amount;
-        }
-        emit MiMoTransfer(address(0), account, amount);
+        // Call the mint function on the MiMoToken contract
+        mimoToken.mint(account, amount);
+        
+        emit MiMoBurned(account, amount); // Additional event for backward compatibility
     }
     
     /**
-     * @dev Internal function to burn MiMo tokens
+     * @dev Wrapper for burning MiMo tokens
      */
     function _mimoBurn(address account, uint256 amount) internal {
         if (account == address(0)) revert ZeroAddressNotAllowed();
         
-        uint256 accountBalance = _mimoBalances[account];
+        // Check if the account has enough balance
+        uint256 accountBalance = mimoToken.balanceOf(account);
         if (accountBalance < amount) revert InsufficientTokenBalance();
         
-        unchecked {
-            _mimoBalances[account] = accountBalance - amount;
-            _mimoTotalSupply -= amount;
+        // If the account is not this contract, we need to transferFrom first
+        if (account != address(this)) {
+            // Check if we have allowance
+            uint256 allowance = mimoToken.allowance(account, address(this));
+            if (allowance < amount) revert InsufficientTokenAllowance();
+            
+            // Transfer tokens to this contract
+            bool success = mimoToken.transferFrom(account, address(this), amount);
+            if (!success) revert TransferFailed();
         }
         
-        emit MiMoTransfer(account, address(0), amount);
+        // Burn the tokens
+        mimoToken.burn(amount);
+        
         emit MiMoBurned(account, amount);
     }
     
     /**
-     * @dev Internal function to transfer MiMo tokens
+     * @dev Wrapper for transferring MiMo tokens
      */
     function _mimoTransfer(address from, address to, uint256 amount) internal {
         if (from == address(0)) revert ZeroAddressNotAllowed();
         if (to == address(0)) revert ZeroAddressNotAllowed();
         
-        uint256 fromBalance = _mimoBalances[from];
+        // Check if the sender has enough balance
+        uint256 fromBalance = mimoToken.balanceOf(from);
         if (fromBalance < amount) revert InsufficientTokenBalance();
         
-        unchecked {
-            _mimoBalances[from] = fromBalance - amount;
-            _mimoBalances[to] += amount;
-        }
-        
-        emit MiMoTransfer(from, to, amount);
-    }
-    
-    /**
-     * @dev Internal function to approve MiMo tokens
-     */
-    function _mimoApprove(address owner, address spender, uint256 amount) internal {
-        if (owner == address(0)) revert ZeroAddressNotAllowed();
-        if (spender == address(0)) revert ZeroAddressNotAllowed();
-        
-        _mimoAllowances[owner][spender] = amount;
-        emit MiMoApproval(owner, spender, amount);
-    }
-    
-    /**
-     * @dev Internal function to spend MiMo token allowance
-     */
-    function _mimoSpendAllowance(address owner, address spender, uint256 amount) internal {
-        uint256 currentAllowance = _mimoAllowances[owner][spender];
-        if (currentAllowance != type(uint256).max) {
-            if (currentAllowance < amount) revert InsufficientTokenAllowance();
-            unchecked {
-                _mimoApprove(owner, spender, currentAllowance - amount);
-            }
+        // If the sender is not this contract, we need to use transferFrom
+        if (from != address(this)) {
+            // Check if we have allowance
+            uint256 allowance = mimoToken.allowance(from, address(this));
+            if (allowance < amount) revert InsufficientTokenAllowance();
+            
+            // Transfer tokens
+            bool success = mimoToken.transferFrom(from, to, amount);
+            if (!success) revert TransferFailed();
+        } else {
+            // Transfer tokens directly from this contract
+            bool success = mimoToken.transfer(to, amount);
+            if (!success) revert TransferFailed();
         }
     }
     
@@ -530,7 +440,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
             }
             
             // Skip targets with zero balance
-            if (_mimoBalances[targetAddress] == 0) {
+            if (mimoToken.balanceOf(targetAddress) == 0) {
                 continue;
             }
             
@@ -555,8 +465,8 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         uint256 huntAmount = hunter.power;
         
         // If target has less than the full hunt amount, hunt whatever is available
-        if (_mimoBalances[targetAddress] < huntAmount) {
-            huntAmount = _mimoBalances[targetAddress];
+        if (mimoToken.balanceOf(targetAddress) < huntAmount) {
+            huntAmount = mimoToken.balanceOf(targetAddress);
             
             // If target has no tokens at all, revert
             if (huntAmount == 0) revert InsufficientTargetBalance();
@@ -590,13 +500,17 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         uint256 burnAmount = (huntAmount * burnPercentage) / 10000;
         uint256 liquidityAmount = (huntAmount * liquidityPercentage) / 10000;
         
-        // Transfer tokens from target to hunter owner
+        // Check if we have allowance from the target address
+        uint256 allowance = mimoToken.allowance(targetAddress, address(this));
+        if (allowance < huntAmount) revert InsufficientTokenAllowance();
+        
+        // Transfer owner reward
         _mimoTransfer(targetAddress, msg.sender, ownerReward);
         
-        // Transfer liquidity portion from target
+        // Transfer liquidity portion to liquidity receiver
         _mimoTransfer(targetAddress, liquidityReceiver, liquidityAmount);
         
-        // Burn tokens from target
+        // Burn the burn portion
         _mimoBurn(targetAddress, burnAmount);
         
         emit HunterHunted(tokenId, huntAmount, ownerReward, burnAmount, liquidityAmount);
@@ -845,7 +759,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         uint256 totalAmountRequired = totalAmountPerNFT * count;
         
         // Check if user has enough MiMo tokens for all redemptions
-        if (_mimoBalances[msg.sender] < totalAmountRequired) revert InsufficientTokenBalance();
+        if (mimoToken.balanceOf(msg.sender) < totalAmountRequired) revert InsufficientTokenBalance();
         
         // Check if contract has enough BEAR NFTs available
         if (bearNFT.balanceOf(address(this)) < count) revert InsufficientNFTBalance();
@@ -870,15 +784,19 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         uint256 totalAmount = REDEMPTION_MIMO_AMOUNT + feeAmount;
         
         // Check if user has enough MiMo tokens
-        if (_mimoBalances[msg.sender] < totalAmount) revert InsufficientTokenBalance();
+        if (mimoToken.balanceOf(msg.sender) < totalAmount) revert InsufficientTokenBalance();
         
         // Check if contract has BEAR NFTs available
         if (bearNFT.balanceOf(address(this)) == 0) revert InsufficientNFTBalance();
         
-        // Transfer fee portion to fee receiver (deduct from user balance)
+        // Check if we have allowance
+        uint256 allowance = mimoToken.allowance(msg.sender, address(this));
+        if (allowance < totalAmount) revert InsufficientTokenAllowance();
+        
+        // Transfer fee to fee receiver
         _mimoTransfer(msg.sender, feeReceiver, feeAmount);
         
-        // Burn the redemption amount
+        // Burn the MIMO tokens
         _mimoBurn(msg.sender, REDEMPTION_MIMO_AMOUNT);
         
         // Find a BEAR NFT to transfer
@@ -1349,72 +1267,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         super._increaseBalance(account, value);
     }
     
-    // Standard ERC20 functions for external compatibility
-    function transfer(address to, uint256 amount) public returns (bool) {
-        address from = msg.sender;
-        if (from == address(0)) revert ZeroAddressNotAllowed();
-        if (to == address(0)) revert ZeroAddressNotAllowed();
-        
-        uint256 fromBalance = _mimoBalances[from];
-        if (fromBalance < amount) revert InsufficientTokenBalance();
-        
-        unchecked {
-            _mimoBalances[from] = fromBalance - amount;
-            _mimoBalances[to] += amount;
-        }
-        
-        emit MiMoTransfer(from, to, amount);
-        return true;
-    }
-    
-    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
-        address spender = msg.sender;
-        
-        uint256 currentAllowance = _mimoAllowances[from][spender];
-        if (currentAllowance < amount) revert InsufficientTokenAllowance();
-        
-        if (from == address(0)) revert ZeroAddressNotAllowed();
-        if (to == address(0)) revert ZeroAddressNotAllowed();
-        
-        uint256 fromBalance = _mimoBalances[from];
-        if (fromBalance < amount) revert InsufficientTokenBalance();
-        
-        unchecked {
-            _mimoAllowances[from][spender] = currentAllowance - amount;
-            _mimoBalances[from] = fromBalance - amount;
-            _mimoBalances[to] += amount;
-        }
-        
-        emit MiMoTransfer(from, to, amount);
-        return true;
-    }
-    
-    function balanceOf(address account) public view returns (uint256) {
-        return _mimoBalances[account];
-    }
-    
-    function totalSupply() public view returns (uint256) {
-        return _mimoTotalSupply;
-    }
-    
-    function allowance(address owner, address spender) public view returns (uint256) {
-        return _mimoAllowances[owner][spender];
-    }
-    
-    function approve(address spender, uint256 amount) public returns (bool) {
-        address owner = msg.sender;
-        if (owner == address(0)) revert ZeroAddressNotAllowed();
-        if (spender == address(0)) revert ZeroAddressNotAllowed();
-        
-        _mimoAllowances[owner][spender] = amount;
-        
-        emit MiMoApproval(owner, spender, amount);
-        return true;
-    }
-    
-    function decimals() public pure returns (uint8) {
-        return _mimoDecimals;
-    }
+    // Token functions are now delegated to the MiMoToken contract
     
     function supportsInterface(bytes4 interfaceId)
         public
@@ -1422,9 +1275,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         override(ERC721Enumerable)
         returns (bool)
     {
-        return super.supportsInterface(interfaceId) || 
-               interfaceId == type(IERC20).interfaceId || 
-               interfaceId == type(IERC20Metadata).interfaceId;
+        return super.supportsInterface(interfaceId);
     }
     
     // Allow contract to receive ETH
