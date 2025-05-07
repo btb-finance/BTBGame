@@ -5,8 +5,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-contract BTBSwapLogic is Ownable, ReentrancyGuard {
+contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     IERC721 public bearNFT;
     IERC20 public btbToken;
     address public feeReceiver; // For admin fees from swaps
@@ -20,6 +21,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
     error TransferFailed();
     error InvalidFeePercentage();
     error NoNFTsAvailableForRedemption();
+    error NotBearNFT(); // For onERC721Received check
 
     // BTBSwap Variables
     uint256 public swapFeePercentage = 100; // Default 1% (in basis points)
@@ -203,14 +205,11 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
 
     // Function for BearHunterEcosystem (owner) to retrieve an NFT for user redemption
     function retrieveAnyNFTForRedemption(address recipient) external onlyOwner nonReentrant returns (uint256 tokenId) {
-        if (recipient == address(0)) revert InvalidAmount(); // Using InvalidAmount for zero address recipient
+        if (recipient == address(0)) revert InvalidAmount(); 
         
         uint256 balance = bearNFT.balanceOf(address(this));
         if (balance == 0) revert NoNFTsAvailableForRedemption();
 
-        // This iteration to find an NFT is gas-intensive and not ideal for large supplies.
-        // A more robust inventory system (e.g., EnumerableSet or a linked list) is recommended for production.
-        // Assuming max 100k total supply for BearNFTs as in previous logic.
         for (uint256 i = 1; i <= 100000; i++) { 
             try bearNFT.ownerOf(i) returns (address owner) {
                 if (owner == address(this)) {
@@ -220,10 +219,29 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
                     return tokenId;
                 }
             } catch {
-                // Skip to next id if this one doesn't exist or ownerOf reverts
                 continue;
             }
         }
-        revert NoNFTsAvailableForRedemption(); // Should be caught by balance check, but as a fallback.
+        revert NoNFTsAvailableForRedemption(); 
+    }
+
+    /**
+     * @dev See {IERC721Receiver-onERC721Received}.
+     * This contract should only accept BearNFTs it is configured to handle.
+     */
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external override returns (bytes4) {
+        // Check if the received NFT is the configured bearNFT contract
+        // msg.sender in this context is the NFT contract calling this hook
+        if (msg.sender != address(bearNFT)) {
+            revert NotBearNFT(); 
+        }
+        // Further checks can be added here if needed, e.g., based on `data` or `operator`
+        // For now, just accepting the configured bearNFT is sufficient for its role as a liquidity pool
+        return this.onERC721Received.selector;
     }
 } 
