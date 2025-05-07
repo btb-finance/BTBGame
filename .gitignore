@@ -1,6 +1,37 @@
-**/.claude/settings.local.json
-node_modules
+# General
 .DS_Store
-.cache
-solidity-files-cache.json
-build
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Node / Package Managers
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Environment Variables
+.env
+
+# Hardhat
+artifacts/
+cache/ # Standard Hardhat/Foundry cache directory
+# .cache # User had this, keeping it just in case. Remove if not needed.
+solidity-files-cache.json # User had this, possibly older Hardhat or specific tool.
+
+# Foundry / Forge
+out/
+broadcast/
+# cache/ is covered above
+
+# Coverage
+coverage/
+coverage.json
+
+# Build artifacts
+build/ # User had this.
+
+# Claude local settings (from user's original file)
+**/.claude/settings.local.json

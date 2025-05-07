@@ -15,13 +15,16 @@ import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {MiMoGaMe} from "./MiMoToken.sol";
+import {HunterStorage} from "./HunterStorage.sol";
+import {TokenURILogic} from "./TokenURILogic.sol";
+import {BTBSwapLogic} from "./BTBSwapLogic.sol";
 
 /**
  * @title BearHunterEcosystem
  * @dev Comprehensive contract that integrates all BEAR & Hunter ecosystem functionality
  * including BTB swapping capabilities
  */
-contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC721Burnable, Ownable, Pausable, ReentrancyGuard, IERC721Receiver {
+contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC721Burnable, Ownable, Pausable, ReentrancyGuard, IERC721Receiver, HunterStorage {
     // Custom errors
     error ZeroAddressNotAllowed();
     error InvalidAmount();
@@ -45,37 +48,17 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     error ETHTransferFailed();
     error AddressIsProtected();
     error HunterNotExpired();
+    error BTBSwapNotConfigured();
 
     // External contract interfaces
     IERC721 public bearNFT;  // Existing BEAR NFT contract
     IERC20 public btbToken;  // Existing BTB token contract
     MiMoGaMe public mimoToken;  // MiMo token contract
     
-    // HunterPosition struct to store all hunter attributes on-chain
-    struct HunterPosition {
-        uint96 creationTime;       // When the hunter was created
-        uint96 lastFeedTime;       // Last time hunter was fed
-        uint96 lastHuntTime;       // Last time hunter hunted
-        uint128 power;             // Current hunting power (e.g., with 18 decimals)
-        uint8 missedFeedings;      // Consecutive missed feedings
-        bool inHibernation;        // Whether hunter is in hibernation
-        uint96 recoveryStartTime;  // When hunter started recovery from hibernation
-        uint128 totalHunted;        // Total amount of MiMo tokens hunted (e.g., with 18 decimals)
-    }
-    
     // Constants for MIMO token and deposits/redemptions
     uint256 public constant DEPOSIT_MIMO_REWARD = 1_000_000 * 10**18; // 1M MiMo tokens
     uint256 public constant REDEMPTION_MIMO_AMOUNT = 1_000_000 * 10**18; // 1M MiMo tokens
     uint256 public constant REDEMPTION_FEE_PERCENTAGE = 10; // 10% fee on redemption
-    
-    // Constants for Hunter mechanics
-    uint256 private constant BASE_POWER = 20 * 10**18;  // 20 MiMo per day base power (assuming 18 decimals)
-    uint256 private constant LIFESPAN = 365 days;       // Hunter lifespan
-    uint256 private constant MISSED_FEEDING_PENALTY = 30; // 30% power reduction after hibernation (percentage points)
-    uint256 private constant HIBERNATION_THRESHOLD = 7;   // 7 missed feedings causes hibernation
-    uint256 private constant RECOVERY_PERIOD = 1 days;    // 24 hours to recover from hibernation
-    uint256 private constant HUNT_COOLDOWN = 24 hours;    // Can hunt once every 24 hours
-    uint256 private constant GROWTH_RATE = 200;          // 2% power increase for feeding (in basis points, e.g. 200 = 2%)
     
     // Pause states for different actions
     bool public depositPaused;
@@ -95,19 +78,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     // Address that receives liquidity portion
     address public liquidityReceiver;
     
-    // Mapping from token ID to HunterPosition struct
-    mapping(uint256 => HunterPosition) public positions;
-    
-    // ========================== BTBSwap Variables ==========================
-    
-    // Fee percentage (in basis points, 100 = 1%)
-    uint256 public swapFeePercentage = 100; // Default 1%
-    
-    // Percentage of fees that go to admin (in basis points of the fee, 5000 = 50%)
-    uint256 public adminFeeShare = 5000; // Default 50%
-    
-    // Admin fee recipient address (reusing feeReceiver to simplify)
-    
+    // BTBSwapLogic contract instance
+    BTBSwapLogic public btbSwapContract;
+
     // Events
     // MiMo Token events
     event MiMoTransfer(address indexed from, address indexed to, uint256 value);
@@ -116,11 +89,6 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     // Hunter & Cave events
     event BearDeposited(address indexed user, uint256 bearId, uint256 hunterId);
     event BearRedeemed(address indexed user, uint256 bearId, uint256 mimoAmount);
-    event HunterCreated(uint256 indexed tokenId, address indexed owner, uint256 power);
-    event HunterFed(uint256 indexed tokenId, uint256 newPower);
-    event HunterHunted(uint256 indexed tokenId, uint256 amount, uint256 toOwner, uint256 burned, uint256 toLiquidity);
-    event HunterHibernated(uint256 indexed tokenId);
-    event HunterRecovered(uint256 indexed tokenId, uint256 newPower);
     event MiMoBurned(address indexed user, uint256 amount);
     event DepositStateChanged(bool paused);
     event RedemptionStateChanged(bool paused);
@@ -128,19 +96,10 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     event AddressProtectionUpdated(address indexed protectedAddress, bool status);
     
     // BTBSwap events
-    event SwapBTBForNFT(address indexed user, uint256 btbAmount, uint256[] nftIds);
-    event SwapNFTForBTB(address indexed user, uint256[] nftIds, uint256 btbAmount);
-    event SwapStatusChanged(bool paused);
-    event SwapFeePercentageUpdated(uint256 newFeePercentage);
-    event AdminFeeShareUpdated(uint256 newAdminFeeShare);
-    event FeesCollected(address indexed recipient, uint256 amount);
     event TokenWithdrawn(address indexed token, address indexed recipient, uint256 amount);
     event ETHWithdrawn(address indexed recipient, uint256 amount);
     
     // Constructor
-    // Swap pause state
-    bool public swapPaused;
-    
     constructor(
         address _bearNFT,
         address _btbToken,
@@ -148,7 +107,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         address _liquidityReceiver,
         address _feeReceiver,
         address initialOwner
-    ) ERC721("Hunter", "HNTR") Ownable(initialOwner) {
+    ) ERC721("Hunter", "HNTR") Ownable(initialOwner) HunterStorage() {
         if (_bearNFT == address(0) || _btbToken == address(0) || _mimoToken == address(0) ||
             _liquidityReceiver == address(0) || _feeReceiver == address(0)) revert ZeroAddressNotAllowed();
         
@@ -158,8 +117,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         liquidityReceiver = _liquidityReceiver;
         feeReceiver = _feeReceiver;
         
-        // Initialize BTBSwap defaults
-        swapPaused = false;
+        // Deploy BTBSwapLogic contract
+        btbSwapContract = new BTBSwapLogic(initialOwner, _bearNFT, _btbToken, _feeReceiver);
     }
     
     // ========================== MIMO TOKEN WRAPPER FUNCTIONS ==========================
@@ -306,7 +265,6 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         if (pos.inHibernation) {
             pos.inHibernation = false;
             pos.recoveryStartTime = uint96(block.timestamp);
-            emit HunterRecovered(tokenId, pos.power); // Power doesn't change on recovery start
             pos.lastFeedTime = uint96(block.timestamp);
             pos.missedFeedings = 0;
             return;
@@ -342,14 +300,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
                 pos.inHibernation = true;
                 // Reduce power by penalty percentage
                 pos.power = uint128((uint256(pos.power) * (10000 - MISSED_FEEDING_PENALTY)) / 10000);
-                emit HunterHibernated(tokenId);
             }
         }
         
         // Update last feed time
         pos.lastFeedTime = uint96(block.timestamp);
-        
-        emit HunterFed(tokenId, pos.power);
     }
     
     // Custom error for when a hunt target doesn't have enough tokens
@@ -476,9 +431,6 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             // Update feeding-related stats
             pos.lastFeedTime = uint96(block.timestamp);
             pos.missedFeedings = 0;
-            
-            // Emit feeding event
-            emit HunterFed(tokenId, pos.power);
         }
         
         // Calculate reward distribution
@@ -516,6 +468,14 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         
         HunterPosition storage pos = positions[tokenId];
         
+        uint256 remainingLifespan;
+        uint256 endTime = uint256(pos.creationTime) + LIFESPAN;
+        if (block.timestamp >= endTime) {
+            remainingLifespan = 0;
+        } else {
+            remainingLifespan = (endTime - block.timestamp) / 1 days;
+        }
+        
         return (
             pos.creationTime,
             pos.lastFeedTime,
@@ -525,23 +485,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             pos.inHibernation,
             pos.recoveryStartTime,
             pos.totalHunted,
-            _getRemainingLifespan(tokenId)
+            remainingLifespan
         );
-    }
-    
-    /**
-     * @dev Get remaining lifespan in days
-     */
-    function _getRemainingLifespan(uint256 tokenId) internal view returns (uint256) {
-        // No need to check _exists here if called from getHunterStats which already does.
-        HunterPosition storage pos = positions[tokenId];
-        
-        uint256 endTime = uint256(pos.creationTime) + LIFESPAN;
-        if (block.timestamp >= endTime) {
-            return 0;
-        }
-        
-        return (endTime - block.timestamp) / 1 days;
     }
     
     /**
@@ -688,14 +633,15 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
      * @dev Mint a new Hunter NFT
      */
     function _mintHunter(address to) internal returns (uint256) {
-        uint256 tokenId = totalSupply() + 1; // Potential reentrancy with totalSupply if not careful, but standard.
+        uint256 tokenId = totalSupply() + 1; 
         
         // Initialize hunter position with base attributes
+        // This will use the inherited positions mapping and constants from HunterStorage
         positions[tokenId] = HunterPosition({
             creationTime: uint96(block.timestamp),
             lastFeedTime: uint96(block.timestamp),
-            lastHuntTime: uint96(block.timestamp), // Or 0 if no hunt has occurred
-            power: uint128(BASE_POWER),
+            lastHuntTime: uint96(block.timestamp), 
+            power: uint128(BASE_POWER), // BASE_POWER is from HunterStorage
             missedFeedings: 0,
             inHibernation: false,
             recoveryStartTime: 0,
@@ -704,7 +650,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         
         _safeMint(to, tokenId);
         
-        emit HunterCreated(tokenId, to, uint128(BASE_POWER));
+        emit HunterCreated(tokenId, to, uint128(BASE_POWER)); // HunterCreated is from HunterStorage
         
         return tokenId;
     }
@@ -805,428 +751,90 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         revert InsufficientNFTBalance();
     }
     
-    // ========================== BTB SWAP FUNCTIONS ==========================
-    
-    /**
-     * @dev Calculate the swap rate based on formula:
-     * BTB balance in contract / (NFT total supply - NFTs in contract)
-     */
+    // ========================== BTB SWAP FUNCTIONS (DELEGATED) ==========================
+    function _checkBTBSwapConfigured() internal view {
+        if (address(btbSwapContract) == address(0)) revert BTBSwapNotConfigured();
+    }
+
     function getSwapRate() public view returns (uint256) {
-        uint256 btbBalance = btbToken.balanceOf(address(this));
-        uint256 totalNFTSupply = 100_000; // Assuming 100k total supply of BEAR NFTs
-        uint256 nftsInContract = 0;
-        
-        try bearNFT.balanceOf(address(this)) returns (uint256 balance) {
-            nftsInContract = balance;
-        } catch {
-            // If balance call fails, assume 0
-            nftsInContract = 0;
-        }
-        
-        // If there are no BTB tokens, return 0
-        if (btbBalance == 0) {
-            return 0;
-        }
-        
-        // If there are no NFTs outside the contract, use a default rate
-        // based on total supply to avoid division by zero
-        if (totalNFTSupply == nftsInContract) {
-            // If all NFTs are in the contract, use 10 BTB per NFT as default rate
-            return 1000 * 10**18; // 10 BTB in wei
-        }
-        
-        // Calculate rate: BTB per NFT
-        return btbBalance / (totalNFTSupply - nftsInContract);
+        _checkBTBSwapConfigured();
+        return btbSwapContract.getSwapRate();
     }
-    
-    /**
-     * @dev Swap BTB tokens for BEAR NFTs
-     * @param amount Number of NFTs to receive
-     */
+
     function swapBTBForNFT(uint256 amount) external nonReentrant returns (uint256[] memory) {
-        if (swapPaused) revert SwapPaused();
-        if (amount == 0) revert InvalidAmount();
-        
-        // Check if contract has enough NFTs
-        uint256 contractNFTBalance = 0;
-        try bearNFT.balanceOf(address(this)) returns (uint256 balance) {
-            contractNFTBalance = balance;
-        } catch {
-            revert InsufficientNFTBalance();
-        }
-        
-        if (contractNFTBalance < amount) revert InsufficientNFTBalance();
-        
-        // Calculate BTB amount needed
-        uint256 swapRate = getSwapRate();
-        if (swapRate == 0) revert InvalidAmount();
-        uint256 baseAmount = swapRate * amount;
-        
-        // Apply fee (buyer pays more)
-        uint256 feeAmount = (baseAmount * swapFeePercentage) / 10000;
-        uint256 totalAmount = baseAmount + feeAmount;
-        
-        // Calculate admin's share of the fee
-        uint256 adminFeeAmount = (feeAmount * adminFeeShare) / 10000;
-        
-        // Check user's BTB balance and allowance
-        if (btbToken.balanceOf(msg.sender) < totalAmount) revert InsufficientTokenBalance();
-        if (btbToken.allowance(msg.sender, address(this)) < totalAmount) revert InsufficientTokenAllowance();
-        
-        // Transfer BTB tokens from user to contract
-        bool success = btbToken.transferFrom(msg.sender, address(this), totalAmount);
-        if (!success) revert TransferFailed();
-        
-        // Transfer admin fee if applicable
-        if (adminFeeAmount > 0) {
-            success = btbToken.transfer(feeReceiver, adminFeeAmount);
-            if (success) {
-                emit FeesCollected(feeReceiver, adminFeeAmount);
-            }
-        }
-        
-        // Collect BEAR NFT IDs to transfer
-        uint256[] memory nftIds = new uint256[](amount);
-        uint256 count = 0;
-        
-        // Find NFTs owned by the contract
-        for (uint256 i = 1; count < amount && i <= 100000; i++) {
-            try bearNFT.ownerOf(i) returns (address owner) {
-                if (owner == address(this)) {
-                    nftIds[count] = i;
-                    count++;
-                }
-            } catch {
-                // Skip to next id if this one doesn't exist
-                continue;
-            }
-        }
-        
-        // Make sure we found enough NFTs
-        if (count < amount) revert InsufficientNFTBalance();
-        
-        // Transfer NFTs to the user
-        for (uint256 i = 0; i < amount; i++) {
-            bearNFT.safeTransferFrom(address(this), msg.sender, nftIds[i]);
-        }
-        
-        emit SwapBTBForNFT(msg.sender, totalAmount, nftIds);
-        return nftIds;
+        _checkBTBSwapConfigured();
+        // The BTBSwapLogic contract handles token transfers from/to msg.sender (user)
+        // and interacts with its own liquidity pool.
+        // BearHunterEcosystem needs to ensure BTBSwapLogic is approved or has liquidity.
+        // For this model, BTBSwapLogic holds its own liquidity.
+        // User (msg.sender) needs to approve BearHunterEcosystem IF BearHunterEcosystem were to pull tokens.
+        // But here, BTBSwapLogic will pull tokens from user. So user must approve BTBSwapLogic contract.
+        // This means users need to know the btbSwapContract address.
+        // Alternative: user approves BearHunterEcosystem, which then approves btbSwapContract or transfers to it.
+        // For simplicity now, direct approval to btbSwapContract is implied by its design.
+        // The call from BearHunterEcosystem to btbSwapContract.swapBTBForNFT must pass the user (msg.sender).
+        return btbSwapContract.swapBTBForNFT(msg.sender, amount);
     }
-    
-    /**
-     * @dev Swap BEAR NFTs for BTB tokens by providing specific token IDs
-     * @param tokenIds Array of NFT token IDs to swap
-     */
+
     function swapNFTForBTB(uint256[] calldata tokenIds) external nonReentrant returns (uint256) {
-        if (swapPaused) revert SwapPaused();
-        uint256 length = tokenIds.length;
-        if (length == 0) revert InvalidAmount();
-        
-        // Calculate BTB amount to give
-        uint256 swapRate = getSwapRate();
-        if (swapRate == 0) revert InvalidAmount();
-        uint256 baseAmount = swapRate * length;
-        
-        // Apply fee (seller receives less)
-        uint256 feeAmount = (baseAmount * swapFeePercentage) / 10000;
-        uint256 amountToUser = baseAmount - feeAmount;
-        
-        // Calculate admin's share of the fee
-        uint256 adminFeeAmount = (feeAmount * adminFeeShare) / 10000;
-        
-        // Check contract's BTB balance
-        if (btbToken.balanceOf(address(this)) < amountToUser) revert InsufficientTokenBalance();
-        
-        // Verify user owns all NFTs first
-        for (uint256 i = 0; i < length; i++) {
-            uint256 tokenId = tokenIds[i];
-            address owner;
-            try bearNFT.ownerOf(tokenId) returns (address _owner) {
-                owner = _owner;
-            } catch {
-                revert InsufficientNFTBalance();
-            }
-            if (owner != msg.sender) revert InsufficientNFTBalance();
-        }
-        
-        // Transfer NFTs from user to contract
-        for (uint256 i = 0; i < length; i++) {
-            bearNFT.safeTransferFrom(msg.sender, address(this), tokenIds[i]);
-        }
-        
-        // Transfer BTB tokens to user
-        bool success = btbToken.transfer(msg.sender, amountToUser);
-        if (!success) revert TransferFailed();
-        
-        // Transfer admin fee if applicable
-        if (adminFeeAmount > 0) {
-            success = btbToken.transfer(feeReceiver, adminFeeAmount);
-            if (success) {
-                emit FeesCollected(feeReceiver, adminFeeAmount);
-            }
-        }
-        
-        emit SwapNFTForBTB(msg.sender, tokenIds, amountToUser);
-        return amountToUser;
+        _checkBTBSwapConfigured();
+        // Similar to above, user (msg.sender) must approve BTBSwapLogic for their NFTs.
+        return btbSwapContract.swapNFTForBTB(msg.sender, tokenIds);
     }
-    
-    /**
-     * @dev Pause or unpause swapping
-     * @param paused New pause state
-     */
+
+    // Admin functions for BTBSwap delegated
     function setSwapPaused(bool paused) external onlyOwner {
-        swapPaused = paused;
-        emit SwapStatusChanged(paused);
+        _checkBTBSwapConfigured();
+        btbSwapContract.setSwapPaused(paused);
     }
-    
-    /**
-     * @dev Set the fee percentage (in basis points, 100 = 1%)
-     * @param newFeePercentage New fee percentage
-     */
+
     function setSwapFeePercentage(uint256 newFeePercentage) external onlyOwner {
-        // Limit fee to maximum 100% (10000 basis points)
-        if (newFeePercentage > 10000) revert InvalidFeePercentage();
-        swapFeePercentage = newFeePercentage;
-        emit SwapFeePercentageUpdated(newFeePercentage);
+        _checkBTBSwapConfigured();
+        btbSwapContract.setSwapFeePercentage(newFeePercentage);
     }
-    
-    /**
-     * @dev Set the admin's share of the fee (in basis points, 5000 = 50%)
-     * @param newAdminFeeShare New admin fee share
-     */
+
     function setAdminFeeShare(uint256 newAdminFeeShare) external onlyOwner {
-        // Admin fee share must be between 0-100% (0-10000 basis points)
-        if (newAdminFeeShare > 10000) revert InvalidFeePercentage();
-        adminFeeShare = newAdminFeeShare;
-        emit AdminFeeShareUpdated(newAdminFeeShare);
+        _checkBTBSwapConfigured();
+        btbSwapContract.setAdminFeeShare(newAdminFeeShare);
     }
-    
-    /**
-     * @dev Withdraw BTB tokens (admin only)
-     * @param to Recipient address
-     * @param amount Amount to withdraw
-     */
+
+    // Liquidity management for BTBSwapLogic - to be added if BearHunterEcosystem manages it.
+    // For now, BTBSwapLogic has its own withdraw functions for its owner (BearHunterEcosystem).
+    // Example: ecosystem owner wants to pull funds from swap module
+    function withdrawBTBFromSwapModule(address to, uint256 amount) external onlyOwner {
+        _checkBTBSwapConfigured();
+        btbSwapContract.withdrawBTBCollected(to, amount);
+    }
+
+    function withdrawNFTsFromSwapModule(address to, uint256[] calldata tokenIds) external onlyOwner {
+        _checkBTBSwapConfigured();
+        btbSwapContract.withdrawBearNFTs(to, tokenIds);
+    }
+
+    // ========================== ADMIN / OWNER FUNCTIONS ==========================
+    // ... (withdrawBTB, withdrawERC20, withdrawETH, withdrawNFTs - these currently operate on BearHunterEcosystem's own balance)
+    // If they are meant for swap module liquidity, they should call BTBSwapLogic deposit/funding functions (not yet defined in BTBSwapLogic beyond constructor)
+    // or use withdrawBTBFromSwapModule / withdrawNFTsFromSwapModule.
+
+    // Original withdrawBTB - withdraws from BearHunterEcosystem's direct balance
     function withdrawBTB(address to, uint256 amount) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddressNotAllowed();
-        if (amount > btbToken.balanceOf(address(this))) revert InsufficientTokenBalance();
-        
+        // This refers to btbToken balance of THIS BearHunterEcosystem contract
+        if (btbToken.balanceOf(address(this)) < amount ) revert InsufficientTokenBalance(); 
         bool success = btbToken.transfer(to, amount);
         if (!success) revert TransferFailed();
     }
     
-    /**
-     * @dev Withdraw any ERC20 token (admin only)
-     * @param token Address of the token to withdraw
-     * @param to Recipient address
-     * @param amount Amount to withdraw
-     */
-    function withdrawERC20(address token, address to, uint256 amount) external onlyOwner nonReentrant {
-        if (token == address(0) || to == address(0)) revert ZeroAddressNotAllowed();
-        
-        // Skip symbol fetching to simplify
-        
-        IERC20 tokenContract = IERC20(token);
-        uint256 balance = tokenContract.balanceOf(address(this));
-        if (amount > balance) {
-            amount = balance; // Withdraw all available if requested amount exceeds balance
-        }
-        
-        bool success = tokenContract.transfer(to, amount);
-        if (!success) revert TransferFailed();
-        
-        emit TokenWithdrawn(token, to, amount);
-    }
-    
-    /**
-     * @dev Withdraw ETH (admin only)
-     * @param to Recipient address
-     * @param amount Amount to withdraw (in wei)
-     */
-    function withdrawETH(address payable to, uint256 amount) external onlyOwner nonReentrant {
-        if (to == address(0)) revert ZeroAddressNotAllowed();
-        
-        uint256 balance = address(this).balance;
-        if (amount > balance) {
-            amount = balance; // Withdraw all available if requested amount exceeds balance
-        }
-        
-        (bool success, ) = to.call{value: amount}("");
-        if (!success) revert ETHTransferFailed();
-        
-        emit ETHWithdrawn(to, amount);
-    }
-    
-    /**
-     * @dev Withdraw specific NFTs (admin only)
-     * @param to Recipient address
-     * @param tokenIds Array of NFT token IDs to withdraw
-     */
+    // Original withdrawNFTs - withdraws from BearHunterEcosystem's direct balance (NFTs it directly holds)
     function withdrawNFTs(address to, uint256[] calldata tokenIds) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddressNotAllowed();
-        
-        // First verify all NFTs are owned by the contract
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            address owner;
-            try bearNFT.ownerOf(tokenIds[i]) returns (address _owner) {
-                owner = _owner;
-            } catch {
-                revert InsufficientNFTBalance();
-            }
-            if (owner != address(this)) revert InsufficientNFTBalance();
-        }
-        
-        // Then transfer all NFTs
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+            // Ensure this BearHunterEcosystem contract owns the NFT
+            if (bearNFT.ownerOf(tokenIds[i]) != address(this)) revert InsufficientNFTBalance();
             bearNFT.safeTransferFrom(address(this), to, tokenIds[i]);
         }
     }
-    
-    /**
-     * @dev Withdraw multiple NFTs by quantity (admin only)
-     * @param to Recipient address
-     * @param amount Number of NFTs to withdraw
-     * @return tokenIds Array of withdrawn NFT token IDs
-     */
-    function withdrawNFTsByQuantity(address to, uint256 amount) external onlyOwner nonReentrant returns (uint256[] memory) {
-        if (to == address(0)) revert ZeroAddressNotAllowed();
-        if (amount == 0) revert InvalidAmount();
-        
-        // Check if contract has enough NFTs
-        uint256 contractNFTBalance = 0;
-        try bearNFT.balanceOf(address(this)) returns (uint256 balance) {
-            contractNFTBalance = balance;
-        } catch {
-            revert InsufficientNFTBalance();
-        }
-        
-        if (contractNFTBalance < amount) revert InsufficientNFTBalance();
-        
-        // Collect NFT IDs to withdraw
-        uint256[] memory nftIds = new uint256[](amount);
-        uint256 count = 0;
-        
-        // Find NFTs owned by the contract
-        for (uint256 i = 1; count < amount && i <= 100000; i++) {
-            try bearNFT.ownerOf(i) returns (address owner) {
-                if (owner == address(this)) {
-                    nftIds[count] = i;
-                    count++;
-                }
-            } catch {
-                // Skip to next id if this one doesn't exist
-                continue;
-            }
-        }
-        
-        // Make sure we found enough NFTs
-        if (count < amount) revert InsufficientNFTBalance();
-        
-        // Transfer NFTs to the recipient
-        for (uint256 i = 0; i < amount; i++) {
-            bearNFT.safeTransferFrom(address(this), to, nftIds[i]);
-        }
-        
-        return nftIds;
-    }
-    
-    /**
-     * @dev Get the number of NFT IDs owned by the contract
-     */
-    function getContractNFTCount() external view returns (uint256) {
-        try bearNFT.balanceOf(address(this)) returns (uint256 balance) {
-            return balance;
-        } catch {
-            return 0;
-        }
-    }
-    
 
-    /**
-     * @dev Pause or unpause deposits
-     * @param paused Whether deposits should be paused
-     */
-    function setDepositPaused(bool paused) external onlyOwner {
-        depositPaused = paused;
-        
-        emit DepositStateChanged(paused);
-    }
-    
-    /**
-     * @dev Pause or unpause redemptions
-     * @param paused Whether redemptions should be paused
-     */
-    function setRedemptionPaused(bool paused) external onlyOwner {
-        redemptionPaused = paused;
-        
-        emit RedemptionStateChanged(paused);
-    }
-    
-    /**
-     * @dev Pause all contract functions
-     */
-    function pause() external onlyOwner {
-        _pause();
-    }
-    
-    /**
-     * @dev Unpause all contract functions
-     */
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-    
-    /**
-     * @dev Add or remove protection for an address (owner only)
-     * @param _address The address to protect or unprotect
-     * @param _status True to protect, false to remove protection
-     */
-    function setAddressProtection(address _address, bool _status) external onlyOwner {
-        if (_address == address(0)) revert ZeroAddressNotAllowed();
-        protectedAddresses[_address] = _status;
-        emit AddressProtectionUpdated(_address, _status);
-    }
-    
-    /**
-     * @dev Batch add or remove protection for multiple addresses (owner only)
-     * @param _addresses Array of addresses to update
-     * @param _status True to protect, false to remove protection
-     */
-    function batchSetAddressProtection(address[] calldata _addresses, bool _status) external onlyOwner {
-        for (uint256 i = 0; i < _addresses.length; i++) {
-            if (_addresses[i] == address(0)) revert ZeroAddressNotAllowed();
-            protectedAddresses[_addresses[i]] = _status;
-            emit AddressProtectionUpdated(_addresses[i], _status);
-        }
-    }
-    
-    /**
-     * @dev Check if an address is protected
-     * @param _address Address to check
-     * @return True if the address is protected from hunting
-     */
-    function isAddressProtected(address _address) external view returns (bool) {
-        return protectedAddresses[_address];
-    }
-    
-    /**
-     * @dev Required for ERC721 receiver
-     * Only accepts NFTs from the bearNFT contract
-     */
-    function onERC721Received(
-        address,  // operator
-        address,  // from
-        uint256,  // tokenId
-        bytes calldata  // data
-    ) external view override returns (bytes4) {
-        // Only accept NFTs from the bearNFT contract
-        if (msg.sender != address(bearNFT)) {
-            revert InvalidNFT();
-        }
-        
-        return this.onERC721Received.selector;
-    }
-    
     // ========================== REQUIRED OVERRIDES ==========================
     
     /**
@@ -1256,43 +864,24 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     // ========================== ON-CHAIN TOKEN URI ==========================
 
     /**
-     * @dev Generates a placeholder SVG for the Hunter NFT.
-     * In a real application, this would be more sophisticated.
-     */
-    function generateHunterSVG(HunterPosition memory position, uint256 tokenId, uint256 currentTime) internal pure returns (string memory) {
-        string memory statusText;
-        if (position.inHibernation) {
-            statusText = "Hibernating";
-        } else if (position.recoveryStartTime > 0) {
-            statusText = "Recovering";
-        } else {
-            statusText = "Active";
-        }
-
-        // Basic SVG representation
-        return string(abi.encodePacked(
-            '<svg width="350" height="350" xmlns="http://www.w3.org/2000/svg">',
-            '<style>.text { font: bold 20px sans-serif; fill: white; }</style>',
-            '<rect width="100%" height="100%" fill="#333"/>',
-            '<text x="10" y="30" class="text">Hunter #', Strings.toString(tokenId), '</text>',
-            '<text x="10" y="60" class="text">Power: ', Strings.toString(uint256(position.power) / (10**18)), '</text>', // Assuming power has 18 decimals
-            '<text x="10" y="90" class="text">Status: ', statusText, '</text>',
-            '<text x="10" y="120" class="text">Total Hunted: ', Strings.toString(uint256(position.totalHunted) / (10**18)), '</text>', // Assuming totalHunted has 18 decimals
-            '<text x="10" y="150" class="text">Age: ', Strings.toString((currentTime - position.creationTime) / 1 days), ' days</text>',
-            '</svg>'
-        ));
-    }
-
-    /**
      * @dev Returns the URI for a given token ID, with metadata and image generated on-chain.
      */
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         if (!_exists(tokenId)) revert NonExistentToken();
         
-        HunterPosition memory position = positions[tokenId];
+        HunterPosition memory position = positions[tokenId]; // This will use the inherited positions mapping
         
         // Generate SVG based on hunter stats
-        string memory svg = generateHunterSVG(position, tokenId, block.timestamp);
+        string memory svg = TokenURILogic.generateHunterSVG(position, tokenId, block.timestamp, RECOVERY_PERIOD); // <-- PASS RECOVERY_PERIOD
+        
+        // Calculate remaining lifespan
+        uint256 remainingLifespan;
+        uint256 endTime = uint256(position.creationTime) + LIFESPAN;
+        if (block.timestamp >= endTime) {
+            remainingLifespan = 0;
+        } else {
+            remainingLifespan = (endTime - block.timestamp) / 1 days;
+        }
         
         // Generate metadata JSON
         string memory json = Base64.encode(bytes(string(abi.encodePacked(
@@ -1307,7 +896,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             '{"trait_type":"Missed Feedings","value":', Strings.toString(uint256(position.missedFeedings)), '},',
             '{"trait_type":"Status","value":"', (position.inHibernation ? "Hibernating" : (position.recoveryStartTime > 0 ? "Recovering" : "Active")), '"},',
             '{"trait_type":"Total Hunted","value":', Strings.toString(uint256(position.totalHunted)), '},', // Raw value
-            '{"trait_type":"Days Remaining","value":', Strings.toString(_getRemainingLifespan(tokenId)), '}',
+            '{"trait_type":"Days Remaining","value":', Strings.toString(remainingLifespan), '}',
             ']}'
         ))));
         
@@ -1337,5 +926,29 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // or _exists() will naturally exclude it. Explicitly deleting from the mapping 
         // (e.g., delete positions[tokenId];) could be done for gas state refunds but is not strictly necessary
         // for the burn functionality itself and adds a bit of gas cost to this transaction.
+    }
+
+    // Function to update BTBSwapLogic address if needed (e.g. upgrade)
+    function setBTBSwapContract(address _newBTBSwapContract) external onlyOwner {
+        if (_newBTBSwapContract == address(0)) revert ZeroAddressNotAllowed();
+        btbSwapContract = BTBSwapLogic(_newBTBSwapContract);
+    }
+
+    /**
+     * @dev Required for ERC721 receiver functionality.
+     * Only accepts NFTs from the bearNFT contract for deposits.
+     */
+    function onERC721Received(
+        address, // operator - not used
+        address, // from - not used
+        uint256, // tokenId - not used here, specific logic in _depositBear
+        bytes calldata // data - not used
+    ) external view override returns (bytes4) {
+        // Only accept NFTs from the configured bearNFT contract
+        // This is a general receiver hook. Specific deposit logic elsewhere.
+        if (msg.sender != address(bearNFT)) {
+            revert InvalidNFT(); // Ensure InvalidNFT error is defined
+        }
+        return this.onERC721Received.selector;
     }
 }
