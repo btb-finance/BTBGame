@@ -19,7 +19,10 @@ library TokenURILogic {
         uint256 recoveryPeriod
     ) internal pure returns (string memory) {
         string memory statusText;
-        if (position.inHibernation) {
+        uint256 LIFESPAN = 365 days;  // Add LIFESPAN constant since libraries can't inherit constants
+        if (currentTime > uint256(position.creationTime) + LIFESPAN) {
+            statusText = "EXPIRED";
+        } else if (position.inHibernation) {
             statusText = "Hibernating";
         } else if (position.recoveryStartTime > 0 && currentTime < uint256(position.recoveryStartTime) + recoveryPeriod) {
             statusText = "Recovering";
@@ -35,10 +38,15 @@ library TokenURILogic {
         }
 
         // Basic SVG representation
+        string memory backgroundColor = "#333"; // Default color
+        if (statusText == "EXPIRED") {
+            backgroundColor = "#8B0000"; // Dark red for expired
+        }
+
         return string(abi.encodePacked(
             '<svg width="350" height="350" xmlns="http://www.w3.org/2000/svg">',
             '<style>.text { font: bold 20px sans-serif; fill: white; }</style>',
-            '<rect width="100%" height="100%" fill="#333"/>',
+            '<rect width="100%" height="100%" fill="', backgroundColor, '"/>',
             '<text x="10" y="30" class="text">Hunter #', Strings.toString(tokenId), '</text>',
             '<text x="10" y="60" class="text">Power: ', Strings.toString(uint256(position.power) / (10**18)), '</text>', // Assuming power has 18 decimals
             '<text x="10" y="90" class="text">Status: ', statusText, '</text>',

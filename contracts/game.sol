@@ -888,7 +888,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             '{"trait_type":"Last Feed Time","value":', Strings.toString(uint256(position.lastFeedTime)), '},',
             '{"trait_type":"Last Hunt Time","value":', Strings.toString(uint256(position.lastHuntTime)), '},',
             '{"trait_type":"Missed Feedings","value":', Strings.toString(uint256(position.missedFeedings)), '},',
-            '{"trait_type":"Status","value":"', (position.inHibernation ? "Hibernating" : (position.recoveryStartTime > 0 ? "Recovering" : "Active")), '"},',
+            '{"trait_type":"Status","value":"', (block.timestamp > uint256(position.creationTime) + LIFESPAN ? "EXPIRED" : (position.inHibernation ? "Hibernating" : (position.recoveryStartTime > 0 ? "Recovering" : "Active"))), '"},',
             '{"trait_type":"Total Hunted","value":', Strings.toString(uint256(position.totalHunted)), '},', // Raw value
             '{"trait_type":"Days Remaining","value":', Strings.toString(remainingLifespan), '}',
             ']}'
