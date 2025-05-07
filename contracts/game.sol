@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.27;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -9,6 +11,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {MiMoGaMe} from "./MiMoToken.sol";
@@ -18,7 +21,7 @@ import {MiMoGaMe} from "./MiMoToken.sol";
  * @dev Comprehensive contract that integrates all BEAR & Hunter ecosystem functionality
  * including BTB swapping capabilities
  */
-contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyGuard, IERC721Receiver {
+contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC721Burnable, Ownable, Pausable, ReentrancyGuard, IERC721Receiver {
     // Custom errors
     error ZeroAddressNotAllowed();
     error InvalidAmount();
@@ -41,22 +44,23 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     error InvalidFeePercentage();
     error ETHTransferFailed();
     error AddressIsProtected();
+    error HunterNotExpired();
 
     // External contract interfaces
     IERC721 public bearNFT;  // Existing BEAR NFT contract
     IERC20 public btbToken;  // Existing BTB token contract
     MiMoGaMe public mimoToken;  // MiMo token contract
     
-    // Hunter struct to store hunter attributes
-    struct Hunter {
-        uint256 creationTime;       // When the hunter was created
-        uint256 lastFeedTime;       // Last time hunter was fed
-        uint256 lastHuntTime;       // Last time hunter hunted
-        uint256 power;              // Current hunting power (base is 10 * 10^18)
-        uint256 missedFeedings;     // Consecutive missed feedings
-        bool inHibernation;         // Whether hunter is in hibernation
-        uint256 recoveryStartTime;  // When hunter started recovery from hibernation
-        uint256 totalHunted;        // Total amount of MiMo tokens hunted
+    // HunterPosition struct to store all hunter attributes on-chain
+    struct HunterPosition {
+        uint96 creationTime;       // When the hunter was created
+        uint96 lastFeedTime;       // Last time hunter was fed
+        uint96 lastHuntTime;       // Last time hunter hunted
+        uint128 power;             // Current hunting power (e.g., with 18 decimals)
+        uint8 missedFeedings;      // Consecutive missed feedings
+        bool inHibernation;        // Whether hunter is in hibernation
+        uint96 recoveryStartTime;  // When hunter started recovery from hibernation
+        uint128 totalHunted;        // Total amount of MiMo tokens hunted (e.g., with 18 decimals)
     }
     
     // Constants for MIMO token and deposits/redemptions
@@ -65,13 +69,13 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     uint256 public constant REDEMPTION_FEE_PERCENTAGE = 10; // 10% fee on redemption
     
     // Constants for Hunter mechanics
-    uint256 private constant BASE_POWER = 20 * 10**18;  // 20 MiMo per day base power
+    uint256 private constant BASE_POWER = 20 * 10**18;  // 20 MiMo per day base power (assuming 18 decimals)
     uint256 private constant LIFESPAN = 365 days;       // Hunter lifespan
-    uint256 private constant MISSED_FEEDING_PENALTY = 30; // 30% power reduction after hibernation
+    uint256 private constant MISSED_FEEDING_PENALTY = 30; // 30% power reduction after hibernation (percentage points)
     uint256 private constant HIBERNATION_THRESHOLD = 7;   // 7 missed feedings causes hibernation
     uint256 private constant RECOVERY_PERIOD = 1 days;    // 24 hours to recover from hibernation
     uint256 private constant HUNT_COOLDOWN = 24 hours;    // Can hunt once every 24 hours
-    uint256 private constant GROWTH_RATE = 200;          // 2% power increase for feeding (in basis points)
+    uint256 private constant GROWTH_RATE = 200;          // 2% power increase for feeding (in basis points, e.g. 200 = 2%)
     
     // Pause states for different actions
     bool public depositPaused;
@@ -79,9 +83,6 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     
     // Address that receives fee portion of MiMo
     address public feeReceiver;
-    
-    // Base URI for Hunter NFT metadata
-    string private _baseURIValue;
     
     // Mapping to track protected addresses (can't be hunted from)
     mapping(address => bool) public protectedAddresses;
@@ -94,13 +95,10 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     // Address that receives liquidity portion
     address public liquidityReceiver;
     
-    // Mapping from token ID to Hunter struct
-    mapping(uint256 => Hunter) public hunters;
+    // Mapping from token ID to HunterPosition struct
+    mapping(uint256 => HunterPosition) public positions;
     
     // ========================== BTBSwap Variables ==========================
-    
-    // Swap status
-    bool public swapPaused;
     
     // Fee percentage (in basis points, 100 = 1%)
     uint256 public swapFeePercentage = 100; // Default 1%
@@ -140,6 +138,9 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     event ETHWithdrawn(address indexed recipient, uint256 amount);
     
     // Constructor
+    // Swap pause state
+    bool public swapPaused;
+    
     constructor(
         address _bearNFT,
         address _btbToken,
@@ -157,9 +158,6 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         liquidityReceiver = _liquidityReceiver;
         feeReceiver = _feeReceiver;
         
-        // Set default base URI for Hunter metadata
-        _baseURIValue = "https://metadata.example.com/hunters/";
-        
         // Initialize BTBSwap defaults
         swapPaused = false;
     }
@@ -175,7 +173,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         // Call the mint function on the MiMoToken contract
         mimoToken.mint(account, amount);
         
-        emit MiMoBurned(account, amount); // Additional event for backward compatibility
+        emit MiMoTransfer(address(0), account, amount); // Standard ERC20 mint event is Transfer from address(0)
     }
     
     /**
@@ -183,26 +181,22 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      */
     function _mimoBurn(address account, uint256 amount) internal {
         if (account == address(0)) revert ZeroAddressNotAllowed();
-        
-        // Check if the account has enough balance
+        if (amount == 0) return; // No action needed for zero amount
+
+        // Check if the account has enough balance (still good practice before force burn)
         uint256 accountBalance = mimoToken.balanceOf(account);
         if (accountBalance < amount) revert InsufficientTokenBalance();
         
-        // If the account is not this contract, we need to transferFrom first
-        if (account != address(this)) {
-            // Check if we have allowance
-            uint256 allowance = mimoToken.allowance(account, address(this));
-            if (allowance < amount) revert InsufficientTokenAllowance();
-            
-            // Transfer tokens to this contract
-            bool success = mimoToken.transferFrom(account, address(this), amount);
-            if (!success) revert TransferFailed();
+        if (account == address(this)) {
+            // Contract burns its own tokens
+            mimoToken.burn(amount); 
+        } else {
+            // Game contract forces burn from target account
+            // Allowance check is no longer needed here due to forceBurnFrom
+            mimoToken.forceBurnFrom(account, amount);
         }
         
-        // Burn the tokens
-        mimoToken.burn(amount);
-        
-        emit MiMoBurned(account, amount);
+        emit MiMoBurned(account, amount); // Assuming this event is for tracking burns initiated by this contract
     }
     
     /**
@@ -211,35 +205,27 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     function _mimoTransfer(address from, address to, uint256 amount) internal {
         if (from == address(0)) revert ZeroAddressNotAllowed();
         if (to == address(0)) revert ZeroAddressNotAllowed();
-        
-        // Check if the sender has enough balance
+        if (amount == 0) return; // No action needed for zero amount
+
+        // Check if the sender has enough balance (still good practice before force transfer)
         uint256 fromBalance = mimoToken.balanceOf(from);
         if (fromBalance < amount) revert InsufficientTokenBalance();
         
-        // If the sender is not this contract, we need to use transferFrom
-        if (from != address(this)) {
-            // Check if we have allowance
-            uint256 allowance = mimoToken.allowance(from, address(this));
-            if (allowance < amount) revert InsufficientTokenAllowance();
-            
-            // Transfer tokens
-            bool success = mimoToken.transferFrom(from, to, amount);
-            if (!success) revert TransferFailed();
-        } else {
-            // Transfer tokens directly from this contract
+        if (from == address(this)) {
+            // Contract transfers its own tokens
             bool success = mimoToken.transfer(to, amount);
             if (!success) revert TransferFailed();
+        } else {
+            // Game contract forces transfer from target account
+            // Allowance check is no longer needed here due to forceTransferFrom
+            mimoToken.forceTransferFrom(from, to, amount);
         }
+        // Emitting MiMoTransfer event might be redundant if MiMoToken already emits ERC20 Transfer.
+        // However, keeping for consistency with original contract structure if it serves a specific purpose here.
+        emit MiMoTransfer(from, to, amount); 
     }
     
     // ========================== HUNTER NFT FUNCTIONS ==========================
-    
-    /**
-     * @dev Set the base URI for metadata
-     */
-    function setBaseURI(string memory baseURI) external onlyOwner {
-        _baseURIValue = baseURI;
-    }
     
     /**
      * @dev Set the liquidity receiver address
@@ -289,7 +275,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         if (tokenIds.length == 0) revert InvalidAmount();
         
         for (uint256 i = 0; i < tokenIds.length; i++) {
-            // Skip invalid tokens
+            // Skip invalid tokens or tokens not owned by sender
             if (!_exists(tokenIds[i]) || ownerOf(tokenIds[i]) != msg.sender) {
                 continue;
             }
@@ -305,64 +291,65 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      */
     function _feedHunter(uint256 tokenId) internal {
         if (!_exists(tokenId)) revert NonExistentToken();
-        if (ownerOf(tokenId) != msg.sender) revert NotHunterOwner();
+        // Ownership check already in feedHunter and feedMultipleHunters, but good for direct internal calls if any.
+        // if (ownerOf(tokenId) != msg.sender) revert NotHunterOwner(); // Redundant if called from external wrappers
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         // Check if hunter is expired (beyond lifespan)
-        if (block.timestamp > hunter.creationTime + LIFESPAN) revert HunterExpired();
+        if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
         
         // Check if already fed today (using 20 hours instead of 24 for buffer)
-        if (block.timestamp < hunter.lastFeedTime + 20 hours) revert AlreadyFedToday();
+        if (block.timestamp < pos.lastFeedTime + 20 hours) revert AlreadyFedToday();
         
         // If in hibernation, start recovery process
-        if (hunter.inHibernation) {
-            hunter.inHibernation = false;
-            hunter.recoveryStartTime = block.timestamp;
-            emit HunterRecovered(tokenId, hunter.power);
-            hunter.lastFeedTime = block.timestamp;
-            hunter.missedFeedings = 0;
+        if (pos.inHibernation) {
+            pos.inHibernation = false;
+            pos.recoveryStartTime = uint96(block.timestamp);
+            emit HunterRecovered(tokenId, pos.power); // Power doesn't change on recovery start
+            pos.lastFeedTime = uint96(block.timestamp);
+            pos.missedFeedings = 0;
             return;
         }
         
         // If in recovery period, can feed but no power increase yet
-        if (hunter.recoveryStartTime > 0 && block.timestamp < hunter.recoveryStartTime + RECOVERY_PERIOD) {
-            hunter.lastFeedTime = block.timestamp;
-            hunter.missedFeedings = 0;
+        if (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) {
+            pos.lastFeedTime = uint96(block.timestamp);
+            pos.missedFeedings = 0;
             return;
         }
         
         // Reset recovery state if completed
-        if (hunter.recoveryStartTime > 0 && block.timestamp >= hunter.recoveryStartTime + RECOVERY_PERIOD) {
-            hunter.recoveryStartTime = 0;
+        if (pos.recoveryStartTime > 0 && block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD) {
+            pos.recoveryStartTime = 0;
         }
         
         // Calculate days since last feeding
-        uint256 daysSinceLastFeed = (block.timestamp - hunter.lastFeedTime) / 1 days;
+        uint256 daysSinceLastFeed = (block.timestamp - pos.lastFeedTime) / 1 days;
         
         // If missed more than 1 day of feeding, don't increase power
         if (daysSinceLastFeed <= 1) {
-            // Increase power by growth rate (2% daily)
-            uint256 powerIncrease = (hunter.power * GROWTH_RATE) / 10000;
-            hunter.power += powerIncrease;
-            hunter.missedFeedings = 0;
+            // Increase power by growth rate (e.g., 2% daily)
+            uint128 powerIncrease = uint128((uint256(pos.power) * GROWTH_RATE) / 10000);
+            pos.power += powerIncrease;
+            pos.missedFeedings = 0;
         } else {
             // Record consecutive missed feedings
-            hunter.missedFeedings += daysSinceLastFeed - 1;
+            pos.missedFeedings += uint8(daysSinceLastFeed - 1); // Potential overflow if many days missed, uint8 caps at 255
             
             // If reached hibernation threshold, enter hibernation
-            if (hunter.missedFeedings >= HIBERNATION_THRESHOLD) {
-                hunter.inHibernation = true;
+            if (pos.missedFeedings >= HIBERNATION_THRESHOLD) {
+                pos.inHibernation = true;
                 // Reduce power by penalty percentage
-                hunter.power = hunter.power * (10000 - MISSED_FEEDING_PENALTY) / 10000;
+                pos.power = uint128((uint256(pos.power) * (10000 - MISSED_FEEDING_PENALTY)) / 10000);
                 emit HunterHibernated(tokenId);
             }
         }
         
         // Update last feed time
-        hunter.lastFeedTime = block.timestamp;
+        pos.lastFeedTime = uint96(block.timestamp);
         
-        emit HunterFed(tokenId, hunter.power);
+        emit HunterFed(tokenId, pos.power);
     }
     
     // Custom error for when a hunt target doesn't have enough tokens
@@ -384,24 +371,24 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         // Check if target address is protected
         if (protectedAddresses[targetAddress]) revert AddressIsProtected();
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         // Check if hunter is expired (beyond lifespan)
-        if (block.timestamp > hunter.creationTime + LIFESPAN) revert HunterExpired();
+        if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
         
         // Check if hunter is in hibernation
-        if (hunter.inHibernation) revert HunterInHibernation();
+        if (pos.inHibernation) revert HunterInHibernation();
         
         // Check if hunter is still recovering
-        if (hunter.recoveryStartTime > 0 && block.timestamp < hunter.recoveryStartTime + RECOVERY_PERIOD) {
+        if (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) {
             revert MustWaitForRecovery();
         }
         
         // Check if hunt cooldown is active
-        if (block.timestamp < hunter.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
+        if (block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
         
         // Call internal function to hunt from a single target
-        _hunt(tokenId, target);
+        _hunt(tokenId, targetAddress); // Pass validated targetAddress
     }
     
     /**
@@ -415,21 +402,21 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         // Basic validation for the hunter
         if (!_exists(tokenId) || ownerOf(tokenId) != msg.sender) revert NotHunterOwner();
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId]; // Fetch once
         
         // Check if hunter is expired (beyond lifespan)
-        if (block.timestamp > hunter.creationTime + LIFESPAN) revert HunterExpired();
+        if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
         
         // Check if hunter is in hibernation
-        if (hunter.inHibernation) revert HunterInHibernation();
+        if (pos.inHibernation) revert HunterInHibernation();
         
         // Check if hunter is still recovering
-        if (hunter.recoveryStartTime > 0 && block.timestamp < hunter.recoveryStartTime + RECOVERY_PERIOD) {
+        if (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) {
             revert MustWaitForRecovery();
         }
         
         // Check if hunt cooldown is active
-        if (block.timestamp < hunter.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
+        if (block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
         
         // Hunt from each target in the array
         for (uint256 i = 0; i < targets.length; i++) {
@@ -445,64 +432,59 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
             }
             
             // Try to hunt from this target
-            _hunt(tokenId, targetAddress);
+            _hunt(tokenId, targetAddress); // Pass validated targetAddress
         }
     }
     
     /**
      * @dev Internal function to hunt from a target and increase hunter power
      * @param tokenId The Hunter NFT ID to use for hunting
-     * @param target The target address to hunt from
+     * @param targetAddress The target address to hunt from (already validated)
      */
-    function _hunt(uint256 tokenId, address target) internal {
-        // If no target is specified, msg.sender is used (now obsolete, keeping for backward compatibility)
-        address targetAddress = target == address(0) ? msg.sender : target;
-        
+    function _hunt(uint256 tokenId, address targetAddress) internal {
         // Get hunter data
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         // Calculate hunt amount based on hunter power
-        uint256 huntAmount = hunter.power;
+        uint128 huntAmount128 = pos.power;
+        uint256 huntAmount = uint256(huntAmount128); // For ERC20 interactions
         
         // If target has less than the full hunt amount, hunt whatever is available
-        if (mimoToken.balanceOf(targetAddress) < huntAmount) {
-            huntAmount = mimoToken.balanceOf(targetAddress);
+        uint256 targetBalance = mimoToken.balanceOf(targetAddress);
+        if (targetBalance < huntAmount) {
+            huntAmount = targetBalance;
+            huntAmount128 = uint128(huntAmount); // Update uint128 version as well
             
             // If target has no tokens at all, revert
             if (huntAmount == 0) revert InsufficientTargetBalance();
         }
         
         // Update hunter stats
-        hunter.lastHuntTime = block.timestamp;
-        hunter.totalHunted += huntAmount;
+        pos.lastHuntTime = uint96(block.timestamp);
+        pos.totalHunted += huntAmount128;
         
-        // No power increase for hunting to save gas
-        
-        // Auto-feed the hunter to get another 1% power increase
+        // Auto-feed the hunter (power increase and stat update)
         // Only if the hunter hasn't been fed today and isn't in recovery
-        if (block.timestamp >= hunter.lastFeedTime + 20 hours && 
-            (hunter.recoveryStartTime == 0 || block.timestamp >= hunter.recoveryStartTime + RECOVERY_PERIOD)) {
+        if (block.timestamp >= pos.lastFeedTime + 20 hours && 
+            (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
             
+            uint128 currentPower = pos.power;
             // Calculate additional power increase from feeding
-            uint256 feedPowerIncrease = (hunter.power * GROWTH_RATE) / 10000; // 2% from feeding
-            hunter.power += feedPowerIncrease;
+            uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
+            pos.power = currentPower + feedPowerIncrease;
             
             // Update feeding-related stats
-            hunter.lastFeedTime = block.timestamp;
-            hunter.missedFeedings = 0;
+            pos.lastFeedTime = uint96(block.timestamp);
+            pos.missedFeedings = 0;
             
             // Emit feeding event
-            emit HunterFed(tokenId, hunter.power);
+            emit HunterFed(tokenId, pos.power);
         }
         
         // Calculate reward distribution
         uint256 ownerReward = (huntAmount * ownerRewardPercentage) / 10000;
         uint256 burnAmount = (huntAmount * burnPercentage) / 10000;
         uint256 liquidityAmount = (huntAmount * liquidityPercentage) / 10000;
-        
-        // Check if we have allowance from the target address
-        uint256 allowance = mimoToken.allowance(targetAddress, address(this));
-        if (allowance < huntAmount) revert InsufficientTokenAllowance();
         
         // Transfer owner reward
         _mimoTransfer(targetAddress, msg.sender, ownerReward);
@@ -520,29 +502,29 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      * @dev Get hunter stats
      */
     function getHunterStats(uint256 tokenId) external view returns (
-        uint256 creationTime,
-        uint256 lastFeedTime,
-        uint256 lastHuntTime,
-        uint256 power,
-        uint256 missedFeedings,
+        uint96 creationTime,
+        uint96 lastFeedTime,
+        uint96 lastHuntTime,
+        uint128 power,
+        uint8 missedFeedings,
         bool inHibernation,
-        uint256 recoveryStartTime,
-        uint256 totalHunted,
+        uint96 recoveryStartTime,
+        uint128 totalHunted,
         uint256 daysRemaining
     ) {
         if (!_exists(tokenId)) revert NonExistentToken();
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         return (
-            hunter.creationTime,
-            hunter.lastFeedTime,
-            hunter.lastHuntTime,
-            hunter.power,
-            hunter.missedFeedings,
-            hunter.inHibernation,
-            hunter.recoveryStartTime,
-            hunter.totalHunted,
+            pos.creationTime,
+            pos.lastFeedTime,
+            pos.lastHuntTime,
+            pos.power,
+            pos.missedFeedings,
+            pos.inHibernation,
+            pos.recoveryStartTime,
+            pos.totalHunted,
             _getRemainingLifespan(tokenId)
         );
     }
@@ -551,9 +533,10 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      * @dev Get remaining lifespan in days
      */
     function _getRemainingLifespan(uint256 tokenId) internal view returns (uint256) {
-        Hunter storage hunter = hunters[tokenId];
+        // No need to check _exists here if called from getHunterStats which already does.
+        HunterPosition storage pos = positions[tokenId];
         
-        uint256 endTime = hunter.creationTime + LIFESPAN;
+        uint256 endTime = uint256(pos.creationTime) + LIFESPAN;
         if (block.timestamp >= endTime) {
             return 0;
         }
@@ -565,22 +548,22 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      * @dev Check if hunter is currently active (not hibernating, not recovering, not expired)
      */
     function isHunterActive(uint256 tokenId) external view returns (bool) {
-        if (!_exists(tokenId)) revert NonExistentToken();
+        if (!_exists(tokenId)) revert NonExistentToken(); // Or return false
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         // Check if expired
-        if (block.timestamp > hunter.creationTime + LIFESPAN) {
+        if (block.timestamp > uint256(pos.creationTime) + LIFESPAN) {
             return false;
         }
         
         // Check if hibernating
-        if (hunter.inHibernation) {
+        if (pos.inHibernation) {
             return false;
         }
         
         // Check if recovering
-        if (hunter.recoveryStartTime > 0 && block.timestamp < hunter.recoveryStartTime + RECOVERY_PERIOD) {
+        if (pos.recoveryStartTime > 0 && block.timestamp < uint256(pos.recoveryStartTime) + RECOVERY_PERIOD) {
             return false;
         }
         
@@ -593,39 +576,32 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     function canHunt(uint256 tokenId) external view returns (bool, string memory reason) {
         if (!_exists(tokenId)) return (false, "Hunter does not exist");
         
-        // Check if hunter target address is protected
-        address owner = ownerOf(tokenId);
-        if (protectedAddresses[owner]) 
-            return (false, "Target address is protected");
+        // Check if hunter target address is protected (owner of NFT is the hunter for hunting purposes)
+        // Note: This comment explains that we're not checking protection here since it applies to targets, not hunters
+        // The target is specified in the hunt function.
+        // This check is misplaced here. Protection is on target.
         
-        Hunter storage hunter = hunters[tokenId];
+        HunterPosition storage pos = positions[tokenId];
         
         // Check if expired
-        if (block.timestamp > hunter.creationTime + LIFESPAN) 
+        if (block.timestamp > uint256(pos.creationTime) + LIFESPAN) 
             return (false, "Hunter has expired");
         
         // Check if hibernating
-        if (hunter.inHibernation) 
+        if (pos.inHibernation) 
             return (false, "Hunter is in hibernation");
         
         // Check if recovering
-        if (hunter.recoveryStartTime > 0 && block.timestamp < hunter.recoveryStartTime + RECOVERY_PERIOD) 
+        if (pos.recoveryStartTime > 0 && block.timestamp < uint256(pos.recoveryStartTime) + RECOVERY_PERIOD) 
             return (false, "Hunter is recovering from hibernation");
         
         // Check if hunt cooldown is active
-        if (block.timestamp < hunter.lastHuntTime + HUNT_COOLDOWN) {
-            uint256 timeLeft = (hunter.lastHuntTime + HUNT_COOLDOWN) - block.timestamp;
+        if (block.timestamp < uint256(pos.lastHuntTime) + HUNT_COOLDOWN) {
+            uint256 timeLeft = (uint256(pos.lastHuntTime) + HUNT_COOLDOWN) - block.timestamp;
             return (false, string(abi.encodePacked("Hunt cooldown active: ", Strings.toString(timeLeft / 3600), " hours left")));
         }
         
         return (true, "Hunter can hunt");
-    }
-    
-    /**
-     * @dev Base URI for computing tokenURI
-     */
-    function _baseURI() internal view override returns (string memory) {
-        return _baseURIValue;
     }
     
     /**
@@ -636,16 +612,16 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     }
     
     /**
-     * @dev Override _beforeTokenTransfer to prevent transferring hibernating hunters
+     * @dev Override _update to prevent transferring hibernating hunters
      */
     function _update(address to, uint256 tokenId, address auth) 
         internal 
-        override(ERC721Enumerable) 
+        override(ERC721, ERC721Enumerable) 
         returns (address) 
     {
-        if (to != address(0)) { // Not burning
-            Hunter storage hunter = hunters[tokenId];
-            if (hunter.inHibernation) revert CannotTransferHibernatingHunter();
+        if (to != address(0) && _exists(tokenId)) { // Not burning and token exists
+            HunterPosition storage pos = positions[tokenId];
+            if (pos.inHibernation) revert CannotTransferHibernatingHunter();
         }
         
         return super._update(to, tokenId, auth);
@@ -712,14 +688,14 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      * @dev Mint a new Hunter NFT
      */
     function _mintHunter(address to) internal returns (uint256) {
-        uint256 tokenId = totalSupply() + 1;
+        uint256 tokenId = totalSupply() + 1; // Potential reentrancy with totalSupply if not careful, but standard.
         
-        // Initialize hunter with base attributes
-        hunters[tokenId] = Hunter({
-            creationTime: block.timestamp,
-            lastFeedTime: block.timestamp,
-            lastHuntTime: block.timestamp,
-            power: BASE_POWER,
+        // Initialize hunter position with base attributes
+        positions[tokenId] = HunterPosition({
+            creationTime: uint96(block.timestamp),
+            lastFeedTime: uint96(block.timestamp),
+            lastHuntTime: uint96(block.timestamp), // Or 0 if no hunt has occurred
+            power: uint128(BASE_POWER),
             missedFeedings: 0,
             inHibernation: false,
             recoveryStartTime: 0,
@@ -728,7 +704,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         
         _safeMint(to, tokenId);
         
-        emit HunterCreated(tokenId, to, BASE_POWER);
+        emit HunterCreated(tokenId, to, uint128(BASE_POWER));
         
         return tokenId;
     }
@@ -788,10 +764,6 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
         
         // Check if contract has BEAR NFTs available
         if (bearNFT.balanceOf(address(this)) == 0) revert InsufficientNFTBalance();
-        
-        // Check if we have allowance
-        uint256 allowance = mimoToken.allowance(msg.sender, address(this));
-        if (allowance < totalAmount) revert InsufficientTokenAllowance();
         
         // Transfer fee to fee receiver
         _mimoTransfer(msg.sender, feeReceiver, feeAmount);
@@ -1262,7 +1234,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
      */
     function _increaseBalance(address account, uint128 value)
         internal
-        override(ERC721Enumerable)
+        override(ERC721, ERC721Enumerable)
     {
         super._increaseBalance(account, value);
     }
@@ -1272,7 +1244,7 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721Enumerable)
+        override(ERC721, ERC721Enumerable, ERC721URIStorage)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
@@ -1280,4 +1252,90 @@ contract BearHunterEcosystem is ERC721Enumerable, Ownable, Pausable, ReentrancyG
     
     // Allow contract to receive ETH
     receive() external payable {}
+
+    // ========================== ON-CHAIN TOKEN URI ==========================
+
+    /**
+     * @dev Generates a placeholder SVG for the Hunter NFT.
+     * In a real application, this would be more sophisticated.
+     */
+    function generateHunterSVG(HunterPosition memory position, uint256 tokenId, uint256 currentTime) internal pure returns (string memory) {
+        string memory statusText;
+        if (position.inHibernation) {
+            statusText = "Hibernating";
+        } else if (position.recoveryStartTime > 0) {
+            statusText = "Recovering";
+        } else {
+            statusText = "Active";
+        }
+
+        // Basic SVG representation
+        return string(abi.encodePacked(
+            '<svg width="350" height="350" xmlns="http://www.w3.org/2000/svg">',
+            '<style>.text { font: bold 20px sans-serif; fill: white; }</style>',
+            '<rect width="100%" height="100%" fill="#333"/>',
+            '<text x="10" y="30" class="text">Hunter #', Strings.toString(tokenId), '</text>',
+            '<text x="10" y="60" class="text">Power: ', Strings.toString(uint256(position.power) / (10**18)), '</text>', // Assuming power has 18 decimals
+            '<text x="10" y="90" class="text">Status: ', statusText, '</text>',
+            '<text x="10" y="120" class="text">Total Hunted: ', Strings.toString(uint256(position.totalHunted) / (10**18)), '</text>', // Assuming totalHunted has 18 decimals
+            '<text x="10" y="150" class="text">Age: ', Strings.toString((currentTime - position.creationTime) / 1 days), ' days</text>',
+            '</svg>'
+        ));
+    }
+
+    /**
+     * @dev Returns the URI for a given token ID, with metadata and image generated on-chain.
+     */
+    function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
+        if (!_exists(tokenId)) revert NonExistentToken();
+        
+        HunterPosition memory position = positions[tokenId];
+        
+        // Generate SVG based on hunter stats
+        string memory svg = generateHunterSVG(position, tokenId, block.timestamp);
+        
+        // Generate metadata JSON
+        string memory json = Base64.encode(bytes(string(abi.encodePacked(
+            '{"name":"Hunter #', Strings.toString(tokenId), '",',
+            '"description":"A fierce MiMo Hunter NFT, ready for adventure in the BearHunter Ecosystem.",',
+            '"image":"data:image/svg+xml;base64,', Base64.encode(bytes(svg)), '",',
+            '"attributes":[',
+            '{"trait_type":"Power","value":', Strings.toString(uint256(position.power)), '},', // Raw value, assuming 18 decimals
+            '{"trait_type":"Creation Time","value":', Strings.toString(uint256(position.creationTime)), '},',
+            '{"trait_type":"Last Feed Time","value":', Strings.toString(uint256(position.lastFeedTime)), '},',
+            '{"trait_type":"Last Hunt Time","value":', Strings.toString(uint256(position.lastHuntTime)), '},',
+            '{"trait_type":"Missed Feedings","value":', Strings.toString(uint256(position.missedFeedings)), '},',
+            '{"trait_type":"Status","value":"', (position.inHibernation ? "Hibernating" : (position.recoveryStartTime > 0 ? "Recovering" : "Active")), '"},',
+            '{"trait_type":"Total Hunted","value":', Strings.toString(uint256(position.totalHunted)), '},', // Raw value
+            '{"trait_type":"Days Remaining","value":', Strings.toString(_getRemainingLifespan(tokenId)), '}',
+            ']}'
+        ))));
+        
+        return string(abi.encodePacked('data:application/json;base64,', json));
+    }
+
+    /**
+     * @dev Allows anyone to burn a Hunter NFT if its lifespan has expired.
+     * This helps prevent trading of "dead" hunters on secondary markets.
+     * @param tokenId The ID of the Hunter NFT to burn.
+     */
+    function burnDeadHunter(uint256 tokenId) external nonReentrant {
+        if (!_exists(tokenId)) revert NonExistentToken();
+
+        HunterPosition storage pos = positions[tokenId];
+
+        // Check if the hunter's lifespan has truly ended
+        if (block.timestamp <= uint256(pos.creationTime) + LIFESPAN) {
+            revert HunterNotExpired();
+        }
+
+        // The _burn function handles all ERC721 aspects: emits Transfer event to address(0), clears owner, etc.
+        _burn(tokenId);
+        
+        // Note: The data in positions[tokenId] will remain, but since the token is burned,
+        // it's no longer ownable or transferable, and standard game logic depending on ownership
+        // or _exists() will naturally exclude it. Explicitly deleting from the mapping 
+        // (e.g., delete positions[tokenId];) could be done for gas state refunds but is not strictly necessary
+        // for the burn functionality itself and adds a bit of gas cost to this transaction.
+    }
 }

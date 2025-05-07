@@ -7,7 +7,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 1
       },
       viaIR: true
     }
@@ -20,6 +20,8 @@ module.exports = {
       url: "https://sepolia.base.org",
       accounts: ["0x89266ff69e24130a10d24dfb80316a2c6f3e2304345e8796aa820a3a19f27589"],
       chainId: 84532,
+      gasLimit: 30000000,
+      allowUnlimitedContractSize: true
     }
   },
   etherscan: {
