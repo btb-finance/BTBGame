@@ -19,6 +19,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
     error InsufficientTokenAllowance();
     error TransferFailed();
     error InvalidFeePercentage();
+    error NoNFTsAvailableForRedemption();
 
     // BTBSwap Variables
     uint256 public swapFeePercentage = 100; // Default 1% (in basis points)
@@ -32,6 +33,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
     event SwapFeePercentageUpdatedEvent(uint256 newFeePercentage);
     event AdminFeeShareUpdatedEvent(uint256 newAdminFeeShare);
     event FeesCollectedEvent(address indexed recipient, uint256 amount);
+    event NFTDispensedForRedemption(address indexed recipient, uint256 tokenId);
 
     constructor(address initialOwner, address _bearNFTAddress, address _btbTokenAddress, address _feeReceiverAddress) Ownable(initialOwner) {
         bearNFT = IERC721(_bearNFTAddress);
@@ -197,5 +199,31 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard {
             require(bearNFT.ownerOf(tokenIds[i]) == address(this), "Not owner of NFT");
             bearNFT.safeTransferFrom(address(this), to, tokenIds[i]);
         }
+    }
+
+    // Function for BearHunterEcosystem (owner) to retrieve an NFT for user redemption
+    function retrieveAnyNFTForRedemption(address recipient) external onlyOwner nonReentrant returns (uint256 tokenId) {
+        if (recipient == address(0)) revert InvalidAmount(); // Using InvalidAmount for zero address recipient
+        
+        uint256 balance = bearNFT.balanceOf(address(this));
+        if (balance == 0) revert NoNFTsAvailableForRedemption();
+
+        // This iteration to find an NFT is gas-intensive and not ideal for large supplies.
+        // A more robust inventory system (e.g., EnumerableSet or a linked list) is recommended for production.
+        // Assuming max 100k total supply for BearNFTs as in previous logic.
+        for (uint256 i = 1; i <= 100000; i++) { 
+            try bearNFT.ownerOf(i) returns (address owner) {
+                if (owner == address(this)) {
+                    tokenId = i;
+                    bearNFT.safeTransferFrom(address(this), recipient, tokenId);
+                    emit NFTDispensedForRedemption(recipient, tokenId);
+                    return tokenId;
+                }
+            } catch {
+                // Skip to next id if this one doesn't exist or ownerOf reverts
+                continue;
+            }
+        }
+        revert NoNFTsAvailableForRedemption(); // Should be caught by balance check, but as a fallback.
     }
 } 

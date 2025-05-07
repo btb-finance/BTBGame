@@ -615,8 +615,14 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check ownership of BEAR NFT
         if (bearNFT.ownerOf(bearId) != msg.sender) revert InsufficientNFTBalance();
         
-        // Transfer BEAR NFT to this contract
+        // Transfer BEAR NFT to this contract first
         bearNFT.safeTransferFrom(msg.sender, address(this), bearId);
+
+        // Then, transfer the BEAR NFT to the BTBSwapLogic contract for liquidity
+        _checkBTBSwapConfigured(); // Ensure btbSwapContract is set
+        // BearHunterEcosystem must approve btbSwapContract or be the owner to transfer
+        // Since this contract just received it, it can transfer it out.
+        bearNFT.safeTransferFrom(address(this), address(btbSwapContract), bearId);
         
         // Mint MiMo tokens to depositor
         _mimoMint(msg.sender, DEPOSIT_MIMO_REWARD);
@@ -708,8 +714,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check if user has enough MiMo tokens
         if (mimoToken.balanceOf(msg.sender) < totalAmount) revert InsufficientTokenBalance();
         
-        // Check if contract has BEAR NFTs available
-        if (bearNFT.balanceOf(address(this)) == 0) revert InsufficientNFTBalance();
+        // BTBSwapLogic contract must have BEAR NFTs available
+        _checkBTBSwapConfigured(); 
+        // No direct balance check here, retrieveAnyNFTForRedemption will handle it or revert
         
         // Transfer fee to fee receiver
         _mimoTransfer(msg.sender, feeReceiver, feeAmount);
@@ -717,38 +724,12 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Burn the MIMO tokens
         _mimoBurn(msg.sender, REDEMPTION_MIMO_AMOUNT);
         
-        // Find a BEAR NFT to transfer
-        uint256 bearId = _getAvailableBearNFT();
-        
-        // Transfer BEAR NFT to user
-        bearNFT.safeTransferFrom(address(this), msg.sender, bearId);
+        // Retrieve a BEAR NFT from BTBSwapLogic and transfer to user
+        uint256 bearId = btbSwapContract.retrieveAnyNFTForRedemption(msg.sender);
         
         emit BearRedeemed(msg.sender, bearId, totalAmount);
         
         return bearId;
-    }
-    
-    /**
-     * @dev Get an available BEAR NFT from this contract
-     */
-    function _getAvailableBearNFT() internal view returns (uint256) {
-        uint256 balance = bearNFT.balanceOf(address(this));
-        if (balance == 0) revert InsufficientNFTBalance();
-        
-        // For simplicity, return the first BEAR NFT in the contract's ownership
-        // A real implementation would need a more sophisticated approach
-        for (uint256 i = 1; i <= 100000; i++) {
-            try bearNFT.ownerOf(i) returns (address owner) {
-                if (owner == address(this)) {
-                    return i;
-                }
-            } catch {
-                // Skip to next id if this one doesn't exist
-                continue;
-            }
-        }
-        
-        revert InsufficientNFTBalance();
     }
     
     // ========================== BTB SWAP FUNCTIONS (DELEGATED) ==========================
