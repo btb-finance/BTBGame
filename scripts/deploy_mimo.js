@@ -38,11 +38,18 @@ async function main() {
     deployer.address                 // initialOwner
   );
   await bearHunterEcosystem.waitForDeployment();
-  console.log("BearHunterEcosystem deployed to:", await bearHunterEcosystem.getAddress());
+  const ecosystemAddress = await bearHunterEcosystem.getAddress();
+  console.log("BearHunterEcosystem deployed to:", ecosystemAddress);
 
   // Transfer ownership of MiMo token to the ecosystem contract
-  await mimoToken.transferOwnership(await bearHunterEcosystem.getAddress());
+  await mimoToken.transferOwnership(ecosystemAddress);
   console.log("MiMo token ownership transferred to BearHunterEcosystem");
+
+  // Now that BearHunterEcosystem owns MiMoGaMe, have it set itself as the gameContractAddress
+  console.log(`Calling adminSetMiMoGameContract on BearHunterEcosystem (${ecosystemAddress}) to register itself with MiMoGaMe (${await mimoToken.getAddress()})`);
+  const ecosystemContractInstance = await ethers.getContractAt("BearHunterEcosystem", ecosystemAddress);
+  await ecosystemContractInstance.adminSetMiMoGameContract(ecosystemAddress);
+  console.log("BearHunterEcosystem successfully set itself as the game contract on MiMoGaMe.");
 
   // Verify contracts
   console.log("\nVerifying contracts on Basescan...");

@@ -816,6 +816,19 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         }
     }
 
+    /**
+     * @notice Initializes the MiMoGaMe contract by setting this game contract's address.
+     * @dev This function should be called by the owner of BearHunterEcosystem
+     * after BearHunterEcosystem has been made the owner of the MiMoGaMe contract.
+     * This ensures that this contract can call owner-restricted functions on MiMoGaMe
+     * that are gated by the `onlyGameContract` modifier.
+     */
+    function initializeMiMoGameContract() external onlyOwner {
+        // This call is to MiMoGaMe.setGameContractAddress(address).
+        // It requires that BearHunterEcosystem (address(this)) is the current owner of mimoToken.
+        mimoToken.setGameContractAddress(address(this));
+    }
+
     // ========================== REQUIRED OVERRIDES ==========================
     
     /**
