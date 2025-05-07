@@ -1,10 +1,10 @@
 const hre = require("hardhat");
 
 async function main() {
-  const ecosystemAddress = "0x15bd3E6b03e09187cbB36908Ab4E67FfEaEce120"; // BearHunterEcosystem address
+  const ecosystemAddress = "0xd285787625F37F7d6a7EC800812Fb04b6B45e95e"; // BearHunterEcosystem address from recent deployment
   const deployerAddress = "0xbe2680DC1752109b4344DbEB1072fd8Cd880e54b";   // Used as initialOwner and feeReceiver for BTBSwapLogic
-  const bearNFTAddress = "0x3F61fC9118B88F9A472B558Bbd34824eA70F281E";    // BearNFT address
-  const btbTokenAddress = "0x0a960ba59130aa65dBF2542a05Ed5dD268e9C860";   // BTBFinance address
+  const bearNFTAddress = "0x5465Bbc6B28A06714192150DdEa31e796803485a";    // BearNFT address from recent deployment
+  const btbTokenAddress = "0x38A02106BB8531d8Ab96fa006EaE9Ec0718548Cd";   // BTBFinance address from recent deployment
 
   console.log(`Attempting to verify BTBSwapLogic deployed by BearHunterEcosystem at ${ecosystemAddress}`);
 

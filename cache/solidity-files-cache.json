@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/abc/game/contracts/HunterStorage.sol": {
-      "lastModificationDate": 1746597572208,
-      "contentHash": "7185453424d4d29e4d82f7d29b365250",
+      "lastModificationDate": 1746602420182,
+      "contentHash": "94917b94904e734dcd5cde7a3b0d137f",
       "sourceName": "contracts/HunterStorage.sol",
       "solcConfig": {
         "version": "0.8.27",
@@ -39,8 +39,8 @@
       ]
     },
     "/Users/abc/game/contracts/game.sol": {
-      "lastModificationDate": 1746597584182,
-      "contentHash": "b2a7e33041cb54b3ad868463e4c1fc51",
+      "lastModificationDate": 1746602420176,
+      "contentHash": "903184e6f99bb6602edc5d7b125d928b",
       "sourceName": "contracts/game.sol",
       "solcConfig": {
         "version": "0.8.27",
