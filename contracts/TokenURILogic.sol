@@ -39,7 +39,7 @@ library TokenURILogic {
 
         // Basic SVG representation
         string memory backgroundColor = "#333"; // Default color
-        if (statusText == "EXPIRED") {
+        if (keccak256(bytes(statusText)) == keccak256(bytes("EXPIRED"))) {
             backgroundColor = "#8B0000"; // Dark red for expired
         }
 

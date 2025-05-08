@@ -548,6 +548,29 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         
         return (true, "Hunter can hunt");
     }
+
+    /**
+     * @dev Check if hunter can be fed now
+     * @return bool Can the hunter be fed
+     * @return reason Reason why the hunter cannot be fed (if applicable)
+     */
+    function canFeed(uint256 tokenId) external view returns (bool, string memory reason) {
+        if (!_exists(tokenId)) return (false, "Hunter does not exist");
+        
+        HunterPosition storage pos = positions[tokenId];
+        
+        // Check if expired
+        if (block.timestamp > uint256(pos.creationTime) + LIFESPAN) 
+            return (false, "Hunter has expired");
+        
+        // Check if already fed recently (within 20 hours)
+        if (block.timestamp < uint256(pos.lastFeedTime) + 20 hours) {
+            uint256 timeLeft = (uint256(pos.lastFeedTime) + 20 hours) - block.timestamp;
+            return (false, string(abi.encodePacked("Already fed: ", Strings.toString(timeLeft / 3600), " hours until next feeding")));
+        }
+        
+        return (true, "Hunter can be fed");
+    }
     
     /**
      * @dev Returns whether `tokenId` exists.
