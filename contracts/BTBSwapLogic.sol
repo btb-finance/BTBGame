@@ -230,11 +230,11 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
      * This contract should only accept BearNFTs it is configured to handle.
      */
     function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external override returns (bytes4) {
+        address /* operator */,
+        address /* from */,
+        uint256 /* tokenId */,
+        bytes calldata /* data */
+    ) external view override returns (bytes4) {
         // Check if the received NFT is the configured bearNFT contract
         // msg.sender in this context is the NFT contract calling this hook
         if (msg.sender != address(bearNFT)) {
