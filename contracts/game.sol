@@ -712,14 +712,27 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check if user has enough MiMo tokens for all redemptions
         if (mimoToken.balanceOf(msg.sender) < totalAmountRequired) revert InsufficientTokenBalance();
         
-        // Check if contract has enough BEAR NFTs available
-        if (bearNFT.balanceOf(address(this)) < count) revert InsufficientNFTBalance();
+        // Ensure BTBSwapLogic contract is configured
+        _checkBTBSwapConfigured();
         
-        uint256[] memory bearIds = new uint256[](count);
+        // Check if BTBSwapLogic contract has enough BEAR NFTs available, not this contract
+        if (bearNFT.balanceOf(address(btbSwapContract)) < count) revert InsufficientNFTBalance();
         
+        // Transfer fee to fee receiver (for all NFTs at once)
+        uint256 totalFeeAmount = feeAmountPerNFT * count;
+        _mimoTransfer(msg.sender, feeReceiver, totalFeeAmount);
+        
+        // Burn the MIMO tokens (for all NFTs at once)
+        uint256 totalBurnAmount = REDEMPTION_MIMO_AMOUNT * count;
+        _mimoBurn(msg.sender, totalBurnAmount);
+        
+        // Retrieve multiple BEAR NFTs from BTBSwapLogic and transfer to user
+        uint256[] memory bearIds = btbSwapContract.retrieveMultipleNFTsForRedemption(msg.sender, count);
+        
+        // Emit events for each NFT redeemed
+        uint256 totalAmount = totalAmountPerNFT; // Amount per NFT
         for (uint256 i = 0; i < count; i++) {
-            // Process each redemption
-            bearIds[i] = _redeemBear();
+            emit BearRedeemed(msg.sender, bearIds[i], totalAmount);
         }
         
         return bearIds;
