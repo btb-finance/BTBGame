@@ -1,0 +1,12 @@
+{
+  "network": "baseSepolia",
+  "deployer": "0xbe2680DC1752109b4344DbEB1072fd8Cd880e54b",
+  "contracts": {
+    "MiMoGaMe": "0xdD1f8b53f73F84E6D02C5B039bBF66fCBB8d596e",
+    "BTBToken": "0x562beBdE126545a7A3981A82d66c309Cf999cC2d",
+    "BearNFT": "0xe9254621251576Db3B8607E435Bcf82DFD8b2E53",
+    "BearHunterEcosystem": "0xccd95358298277a02351eAA5c8c884BEF767d97e"
+  },
+  "blockNumber": 26100731,
+  "timestamp": "2025-05-23T03:09:10.733Z"
+}

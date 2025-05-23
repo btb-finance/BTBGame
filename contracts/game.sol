@@ -245,6 +245,33 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     }
     
     /**
+     * @dev Internal function to check and update hibernation status based on missed feedings
+     * @param tokenId The Hunter NFT ID to check
+     */
+    function _checkAndUpdateHibernation(uint256 tokenId) internal {
+        HunterPosition storage pos = positions[tokenId];
+        
+        // Skip if already in hibernation or expired
+        if (pos.inHibernation || block.timestamp > pos.creationTime + LIFESPAN) {
+            return;
+        }
+        
+        // Calculate days since last feeding
+        uint256 daysSinceLastFeed = (block.timestamp - pos.lastFeedTime) / 1 days;
+        
+        // If more than hibernation threshold days without feeding, enter hibernation
+        if (daysSinceLastFeed >= HIBERNATION_THRESHOLD) {
+            pos.inHibernation = true;
+            // Apply hibernation penalty (30% power reduction)
+            pos.power = uint128((uint256(pos.power) * (10000 - MISSED_FEEDING_PENALTY)) / 10000);
+            // Update missed feedings count
+            pos.missedFeedings = uint8(daysSinceLastFeed > 255 ? 255 : daysSinceLastFeed);
+            
+            emit HunterHibernated(tokenId);
+        }
+    }
+    
+    /**
      * @dev Internal function to feed a hunter to increase power (but cannot hunt)
      * @param tokenId The Hunter NFT ID to feed
      */
@@ -258,8 +285,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check if hunter is expired (beyond lifespan)
         if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
         
-        // Check if already fed today (using 20 hours instead of 24 for buffer)
-        if (block.timestamp < pos.lastFeedTime + 20 hours) revert AlreadyFedToday();
+        // Check if already fed today (using 24 hours for consistent daily feeding)
+        if (block.timestamp < pos.lastFeedTime + 24 hours) revert AlreadyFedToday();
         
         // If in hibernation, start recovery process
         if (pos.inHibernation) {
@@ -292,8 +319,10 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             pos.power += powerIncrease;
             pos.missedFeedings = 0;
         } else {
-            // Record consecutive missed feedings
-            pos.missedFeedings += uint8(daysSinceLastFeed - 1); // Potential overflow if many days missed, uint8 caps at 255
+            // Record consecutive missed feedings (safely handle overflow)
+            uint256 additionalMissed = daysSinceLastFeed - 1;
+            uint256 totalMissed = uint256(pos.missedFeedings) + additionalMissed;
+            pos.missedFeedings = uint8(totalMissed > 255 ? 255 : totalMissed);
             
             // If reached hibernation threshold, enter hibernation
             if (pos.missedFeedings >= HIBERNATION_THRESHOLD) {
@@ -326,6 +355,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check if target address is protected
         if (protectedAddresses[targetAddress]) revert AddressIsProtected();
         
+        // Check and update hibernation status before proceeding
+        _checkAndUpdateHibernation(tokenId);
+        
         HunterPosition storage pos = positions[tokenId];
         
         // Check if hunter is expired (beyond lifespan)
@@ -357,6 +389,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Basic validation for the hunter
         if (!_exists(tokenId) || ownerOf(tokenId) != msg.sender) revert NotHunterOwner();
         
+        // Check and update hibernation status before proceeding
+        _checkAndUpdateHibernation(tokenId);
+        
         HunterPosition storage pos = positions[tokenId]; // Fetch once
         
         // Check if hunter is expired (beyond lifespan)
@@ -373,6 +408,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Check if hunt cooldown is active
         if (block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
         
+        // Track total hunted in this session
+        uint128 totalHuntedThisSession = 0;
+        
         // Hunt from each target in the array
         for (uint256 i = 0; i < targets.length; i++) {
             // Skip protected addresses
@@ -386,17 +424,40 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
                 continue;
             }
             
-            // Try to hunt from this target
-            _hunt(tokenId, targetAddress); // Pass validated targetAddress
+            // Hunt from this target without updating cooldown
+            uint128 huntedAmount = _huntWithoutCooldownUpdate(tokenId, targetAddress);
+            totalHuntedThisSession += huntedAmount;
+        }
+        
+        // Update hunt cooldown once at the end (only if we actually hunted something)
+        if (totalHuntedThisSession > 0) {
+            pos.lastHuntTime = uint96(block.timestamp);
+            pos.totalHunted += totalHuntedThisSession;
+            
+            // Auto-feed the hunter (power increase and stat update)
+            // Only if the hunter hasn't been fed today and isn't in recovery
+            if (block.timestamp >= pos.lastFeedTime + 24 hours && 
+                (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
+                
+                uint128 currentPower = pos.power;
+                // Calculate additional power increase from feeding
+                uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
+                pos.power = currentPower + feedPowerIncrease;
+                
+                // Update feeding-related stats
+                pos.lastFeedTime = uint96(block.timestamp);
+                pos.missedFeedings = 0;
+            }
         }
     }
     
     /**
-     * @dev Internal function to hunt from a target and increase hunter power
+     * @dev Internal function to hunt from a target without updating hunt cooldown
      * @param tokenId The Hunter NFT ID to use for hunting
      * @param targetAddress The target address to hunt from (already validated)
+     * @return huntAmount128 Amount hunted from this target
      */
-    function _hunt(uint256 tokenId, address targetAddress) internal {
+    function _huntWithoutCooldownUpdate(uint256 tokenId, address targetAddress) internal returns (uint128) {
         // Get hunter data
         HunterPosition storage pos = positions[tokenId];
         
@@ -410,27 +471,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             huntAmount = targetBalance;
             huntAmount128 = uint128(huntAmount); // Update uint128 version as well
             
-            // If target has no tokens at all, revert
-            if (huntAmount == 0) revert InsufficientTargetBalance();
-        }
-        
-        // Update hunter stats
-        pos.lastHuntTime = uint96(block.timestamp);
-        pos.totalHunted += huntAmount128;
-        
-        // Auto-feed the hunter (power increase and stat update)
-        // Only if the hunter hasn't been fed today and isn't in recovery
-        if (block.timestamp >= pos.lastFeedTime + 20 hours && 
-            (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
-            
-            uint128 currentPower = pos.power;
-            // Calculate additional power increase from feeding
-            uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
-            pos.power = currentPower + feedPowerIncrease;
-            
-            // Update feeding-related stats
-            pos.lastFeedTime = uint96(block.timestamp);
-            pos.missedFeedings = 0;
+            // If target has no tokens at all, return 0
+            if (huntAmount == 0) return 0;
         }
         
         // Calculate reward distribution
@@ -448,6 +490,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         _mimoBurn(targetAddress, burnAmount);
         
         emit HunterHunted(tokenId, huntAmount, ownerReward, burnAmount, liquidityAmount);
+        
+        return huntAmount128;
     }
     
     /**
@@ -563,9 +607,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         if (block.timestamp > uint256(pos.creationTime) + LIFESPAN) 
             return (false, "Hunter has expired");
         
-        // Check if already fed recently (within 20 hours)
-        if (block.timestamp < uint256(pos.lastFeedTime) + 20 hours) {
-            uint256 timeLeft = (uint256(pos.lastFeedTime) + 20 hours) - block.timestamp;
+        // Check if already fed recently (within 24 hours)
+        if (block.timestamp < uint256(pos.lastFeedTime) + 24 hours) {
+            uint256 timeLeft = (uint256(pos.lastFeedTime) + 24 hours) - block.timestamp;
             return (false, string(abi.encodePacked("Already fed: ", Strings.toString(timeLeft / 3600), " hours until next feeding")));
         }
         
@@ -980,5 +1024,40 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             revert InvalidNFT(); // Ensure InvalidNFT error is defined
         }
         return this.onERC721Received.selector;
+    }
+
+    /**
+     * @dev Internal function to hunt from a target and increase hunter power
+     * @param tokenId The Hunter NFT ID to use for hunting
+     * @param targetAddress The target address to hunt from (already validated)
+     */
+    function _hunt(uint256 tokenId, address targetAddress) internal {
+        // Get hunter data
+        HunterPosition storage pos = positions[tokenId];
+        
+        // Hunt from target without updating cooldown
+        uint128 huntedAmount = _huntWithoutCooldownUpdate(tokenId, targetAddress);
+        
+        // If no tokens were hunted, revert (for single hunt this should fail)
+        if (huntedAmount == 0) revert InsufficientTargetBalance();
+        
+        // Update hunter stats for single hunt
+        pos.lastHuntTime = uint96(block.timestamp);
+        pos.totalHunted += huntedAmount;
+        
+        // Auto-feed the hunter (power increase and stat update)
+        // Only if the hunter hasn't been fed today and isn't in recovery
+        if (block.timestamp >= pos.lastFeedTime + 24 hours && 
+            (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
+            
+            uint128 currentPower = pos.power;
+            // Calculate additional power increase from feeding
+            uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
+            pos.power = currentPower + feedPowerIncrease;
+            
+            // Update feeding-related stats
+            pos.lastFeedTime = uint96(block.timestamp);
+            pos.missedFeedings = 0;
+        }
     }
 }
