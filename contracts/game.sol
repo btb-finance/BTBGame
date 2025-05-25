@@ -460,10 +460,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             if (huntAmount == 0) return 0;
         }
         
-        // Calculate reward distribution
+        // Calculate reward distribution with proper rounding
         uint256 ownerReward = (huntAmount * ownerRewardPercentage) / 10000;
         uint256 burnAmount = (huntAmount * burnPercentage) / 10000;
-        uint256 liquidityAmount = (huntAmount * liquidityPercentage) / 10000;
+        // Calculate liquidity by subtraction to prevent dust accumulation
+        uint256 liquidityAmount = huntAmount - ownerReward - burnAmount;
         
         // Transfer owner reward
         _mimoTransfer(targetAddress, msg.sender, ownerReward);
@@ -500,10 +501,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         
         uint256 huntAmountUint = uint256(huntAmount);
         
-        // Calculate reward distribution
+        // Calculate reward distribution with proper rounding
         uint256 ownerReward = (huntAmountUint * ownerRewardPercentage) / 10000;
         uint256 burnAmount = (huntAmountUint * burnPercentage) / 10000;
-        uint256 liquidityAmount = (huntAmountUint * liquidityPercentage) / 10000;
+        // Calculate liquidity by subtraction to prevent dust accumulation
+        uint256 liquidityAmount = huntAmountUint - ownerReward - burnAmount;
         
         // Transfer owner reward
         _mimoTransfer(targetAddress, msg.sender, ownerReward);
