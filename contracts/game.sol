@@ -410,9 +410,10 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         
         // Track total hunted in this session
         uint128 totalHuntedThisSession = 0;
+        uint128 remainingPower = pos.power; // Total power available for this hunt session
         
         // Hunt from each target in the array
-        for (uint256 i = 0; i < targets.length; i++) {
+        for (uint256 i = 0; i < targets.length && remainingPower > 0; i++) {
             // Skip protected addresses
             address targetAddress = targets[i] == address(0) ? msg.sender : targets[i];
             if (protectedAddresses[targetAddress]) {
@@ -424,9 +425,19 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
                 continue;
             }
             
-            // Hunt from this target without updating cooldown
-            uint128 huntedAmount = _huntWithoutCooldownUpdate(tokenId, targetAddress);
-            totalHuntedThisSession += huntedAmount;
+            // Calculate how much to hunt from this target (limited by remaining power)
+            uint256 targetBalance = mimoToken.balanceOf(targetAddress);
+            uint128 huntAmount = remainingPower;
+            if (targetBalance < huntAmount) {
+                huntAmount = uint128(targetBalance);
+            }
+            
+            if (huntAmount > 0) {
+                // Hunt specific amount from this target
+                uint128 huntedAmount = _huntSpecificAmount(tokenId, targetAddress, huntAmount);
+                totalHuntedThisSession += huntedAmount;
+                remainingPower -= huntedAmount;
+            }
         }
         
         // Update hunt cooldown once at the end (only if we actually hunted something)
@@ -493,9 +504,10 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             
             // Track total hunted for this hunter
             uint128 totalHuntedThisHunter = 0;
+            uint128 remainingPowerThisHunter = pos.power; // Each hunter has its own power limit
             
             // Hunt from all targets with this hunter
-            for (uint256 j = 0; j < huntTargets.length; j++) {
+            for (uint256 j = 0; j < huntTargets.length && remainingPowerThisHunter > 0; j++) {
                 address targetAddress = huntTargets[j];
                 
                 // Skip protected addresses
@@ -508,9 +520,19 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
                     continue;
                 }
                 
-                // Hunt from this target without updating cooldown
-                uint128 huntedAmount = _huntWithoutCooldownUpdate(tokenId, targetAddress);
-                totalHuntedThisHunter += huntedAmount;
+                // Calculate how much to hunt from this target (limited by remaining power)
+                uint256 targetBalance = mimoToken.balanceOf(targetAddress);
+                uint128 huntAmount = remainingPowerThisHunter;
+                if (targetBalance < huntAmount) {
+                    huntAmount = uint128(targetBalance);
+                }
+                
+                if (huntAmount > 0) {
+                    // Hunt specific amount from this target
+                    uint128 huntedAmount = _huntSpecificAmount(tokenId, targetAddress, huntAmount);
+                    totalHuntedThisHunter += huntedAmount;
+                    remainingPowerThisHunter -= huntedAmount;
+                }
             }
             
             // Update hunter stats if it actually hunted something
@@ -577,6 +599,46 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         emit HunterHunted(tokenId, huntAmount, ownerReward, burnAmount, liquidityAmount);
         
         return huntAmount128;
+    }
+    
+    /**
+     * @dev Internal function to hunt a specific amount from a target
+     * @param tokenId The Hunter NFT ID to use for hunting
+     * @param targetAddress The target address to hunt from (already validated)
+     * @param huntAmount The specific amount to hunt
+     * @return huntAmount128 Amount actually hunted from this target
+     */
+    function _huntSpecificAmount(uint256 tokenId, address targetAddress, uint128 huntAmount) internal returns (uint128) {
+        if (huntAmount == 0) return 0;
+        
+        // If target has less than the requested amount, hunt whatever is available
+        uint256 targetBalance = mimoToken.balanceOf(targetAddress);
+        if (targetBalance < huntAmount) {
+            huntAmount = uint128(targetBalance);
+            
+            // If target has no tokens at all, return 0
+            if (huntAmount == 0) return 0;
+        }
+        
+        uint256 huntAmountUint = uint256(huntAmount);
+        
+        // Calculate reward distribution
+        uint256 ownerReward = (huntAmountUint * ownerRewardPercentage) / 10000;
+        uint256 burnAmount = (huntAmountUint * burnPercentage) / 10000;
+        uint256 liquidityAmount = (huntAmountUint * liquidityPercentage) / 10000;
+        
+        // Transfer owner reward
+        _mimoTransfer(targetAddress, msg.sender, ownerReward);
+        
+        // Transfer liquidity portion to liquidity receiver
+        _mimoTransfer(targetAddress, liquidityReceiver, liquidityAmount);
+        
+        // Burn the burn portion
+        _mimoBurn(targetAddress, burnAmount);
+        
+        emit HunterHunted(tokenId, huntAmountUint, ownerReward, burnAmount, liquidityAmount);
+        
+        return huntAmount;
     }
     
     /**
