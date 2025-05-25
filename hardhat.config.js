@@ -7,14 +7,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1,
-        details: {
-          yul: true,
-          yulDetails: {
-            stackAllocation: true,
-            optimizerSteps: "dhfoDgvulfnTUtnIf"
-          }
-        }
+        runs: 1
       },
       viaIR: true
     }
