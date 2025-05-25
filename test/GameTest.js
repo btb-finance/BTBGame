@@ -29,7 +29,7 @@ describe("BEAR & Hunter Ecosystem Tests", function() {
     bearNFT = await BearNFT.deploy(owner.address);
     
     // Deploy MiMo token
-    const MiMoToken = await ethers.getContractFactory("MiMoGame");
+    const MiMoToken = await ethers.getContractFactory("MiMoGaMe");
     mimoToken = await MiMoToken.deploy(owner.address, owner.address);
     
     // Deploy BTBSwap

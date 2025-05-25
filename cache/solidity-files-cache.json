@@ -2,7 +2,7 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/abc/game/contracts/BTBSwapLogic.sol": {
-      "lastModificationDate": 1746936200330,
+      "lastModificationDate": 1746936310921,
       "contentHash": "98ed65d133b22ee718bec6b29f2d11f2",
       "sourceName": "contracts/BTBSwapLogic.sol",
       "solcConfig": {
@@ -10,7 +10,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -53,7 +60,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -92,7 +106,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -129,7 +150,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -168,7 +196,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -205,7 +240,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -242,7 +284,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -279,7 +328,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -308,15 +364,22 @@
       ]
     },
     "/Users/abc/game/contracts/game.sol": {
-      "lastModificationDate": 1747971481256,
-      "contentHash": "ac37e00684a2999632976aef97fb7399",
+      "lastModificationDate": 1748171427574,
+      "contentHash": "1ab4b180aeaf28b1154c650d0bbf9d21",
       "sourceName": "contracts/game.sol",
       "solcConfig": {
         "version": "0.8.27",
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -371,7 +434,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -414,7 +484,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -446,7 +523,7 @@
       ]
     },
     "/Users/abc/game/contracts/HunterStorage.sol": {
-      "lastModificationDate": 1746676095698,
+      "lastModificationDate": 1748170006658,
       "contentHash": "94917b94904e734dcd5cde7a3b0d137f",
       "sourceName": "contracts/HunterStorage.sol",
       "solcConfig": {
@@ -454,7 +531,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -491,7 +575,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -532,7 +623,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -571,7 +669,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -608,7 +713,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -653,7 +765,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -693,7 +812,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -735,7 +861,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -776,7 +909,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -815,7 +955,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -857,7 +1004,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -900,7 +1054,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -940,7 +1101,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -982,7 +1150,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1021,7 +1196,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1058,7 +1240,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1095,7 +1284,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1136,7 +1332,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1173,7 +1376,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1210,7 +1420,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1249,7 +1466,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1288,7 +1512,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1325,7 +1556,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1362,7 +1600,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1401,7 +1646,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1441,7 +1693,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1478,7 +1737,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1518,7 +1784,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1557,7 +1830,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1597,7 +1877,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1634,7 +1921,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1671,7 +1965,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1708,7 +2009,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1745,7 +2053,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1785,7 +2100,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1824,7 +2146,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1864,7 +2193,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1901,7 +2237,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1940,7 +2283,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -1979,7 +2329,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -2019,7 +2376,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",
@@ -2059,7 +2423,14 @@
         "settings": {
           "optimizer": {
             "enabled": true,
-            "runs": 200
+            "runs": 1,
+            "details": {
+              "yul": true,
+              "yulDetails": {
+                "stackAllocation": true,
+                "optimizerSteps": "dhfoDgvulfnTUtnIf"
+              }
+            }
           },
           "viaIR": true,
           "evmVersion": "paris",

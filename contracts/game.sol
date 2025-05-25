@@ -219,18 +219,10 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     }
     
     /**
-     * @dev Feed a hunter to increase its power (but cannot hunt)
+     * @dev Feed hunters to increase their power (supports single or multiple)
+     * @param tokenIds Array of Hunter NFT IDs to feed (can be single element)
      */
-    function feedHunter(uint256 tokenId) external nonReentrant {
-        // Call internal function to feed a single hunter
-        _feedHunter(tokenId);
-    }
-    
-    /**
-     * @dev Feed multiple hunters at once to increase their power (but cannot hunt)
-     * @param tokenIds Array of Hunter NFT IDs to feed
-     */
-    function feedMultipleHunters(uint256[] calldata tokenIds) external nonReentrant {
+    function feedHunters(uint256[] calldata tokenIds) external nonReentrant {
         if (tokenIds.length == 0) revert InvalidAmount();
         
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -340,137 +332,14 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     error InsufficientTargetBalance();
 
     /**
-     * @dev Hunt MiMo tokens from a target address and increase hunter power
-     * Also automatically feeds the hunter if possible
-     * @param tokenId The Hunter NFT ID to use for hunting
-     * @param target The address to hunt MiMo tokens from (if address(0), msg.sender is used)
-     */
-    function hunt(uint256 tokenId, address target) external nonReentrant {
-        if (!_exists(tokenId)) revert NonExistentToken();
-        if (ownerOf(tokenId) != msg.sender) revert NotHunterOwner();
-        
-        // If no target is specified, msg.sender is used
-        address targetAddress = target == address(0) ? msg.sender : target;
-        
-        // Check if target address is protected
-        if (protectedAddresses[targetAddress]) revert AddressIsProtected();
-        
-        // Check and update hibernation status before proceeding
-        _checkAndUpdateHibernation(tokenId);
-        
-        HunterPosition storage pos = positions[tokenId];
-        
-        // Check if hunter is expired (beyond lifespan)
-        if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
-        
-        // Check if hunter is in hibernation
-        if (pos.inHibernation) revert HunterInHibernation();
-        
-        // Check if hunter is still recovering
-        if (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) {
-            revert MustWaitForRecovery();
-        }
-        
-        // Check if hunt cooldown is active
-        if (block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
-        
-        // Call internal function to hunt from a single target
-        _hunt(tokenId, targetAddress); // Pass validated targetAddress
-    }
-    
-    /**
-     * @dev Hunt from multiple targets at once and increase hunter power
-     * @param tokenId The Hunter NFT ID to use for hunting
-     * @param targets Array of target addresses to hunt from
-     */
-    function huntMultiple(uint256 tokenId, address[] calldata targets) external nonReentrant {
-        if (targets.length == 0) revert InvalidAmount();
-        
-        // Basic validation for the hunter
-        if (!_exists(tokenId) || ownerOf(tokenId) != msg.sender) revert NotHunterOwner();
-        
-        // Check and update hibernation status before proceeding
-        _checkAndUpdateHibernation(tokenId);
-        
-        HunterPosition storage pos = positions[tokenId]; // Fetch once
-        
-        // Check if hunter is expired (beyond lifespan)
-        if (block.timestamp > pos.creationTime + LIFESPAN) revert HunterExpired();
-        
-        // Check if hunter is in hibernation
-        if (pos.inHibernation) revert HunterInHibernation();
-        
-        // Check if hunter is still recovering
-        if (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) {
-            revert MustWaitForRecovery();
-        }
-        
-        // Check if hunt cooldown is active
-        if (block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) revert HuntCooldownActive();
-        
-        // Track total hunted in this session
-        uint128 totalHuntedThisSession = 0;
-        uint128 remainingPower = pos.power; // Total power available for this hunt session
-        
-        // Hunt from each target in the array
-        for (uint256 i = 0; i < targets.length && remainingPower > 0; i++) {
-            // Skip protected addresses
-            address targetAddress = targets[i] == address(0) ? msg.sender : targets[i];
-            if (protectedAddresses[targetAddress]) {
-                continue;
-            }
-            
-            // Skip targets with zero balance
-            if (mimoToken.balanceOf(targetAddress) == 0) {
-                continue;
-            }
-            
-            // Calculate how much to hunt from this target (limited by remaining power)
-            uint256 targetBalance = mimoToken.balanceOf(targetAddress);
-            uint128 huntAmount = remainingPower;
-            if (targetBalance < huntAmount) {
-                huntAmount = uint128(targetBalance);
-            }
-            
-            if (huntAmount > 0) {
-                // Hunt specific amount from this target
-                uint128 huntedAmount = _huntSpecificAmount(tokenId, targetAddress, huntAmount);
-                totalHuntedThisSession += huntedAmount;
-                remainingPower -= huntedAmount;
-            }
-        }
-        
-        // Update hunt cooldown once at the end (only if we actually hunted something)
-        if (totalHuntedThisSession > 0) {
-            pos.lastHuntTime = uint96(block.timestamp);
-            pos.totalHunted += totalHuntedThisSession;
-            
-            // Auto-feed the hunter (power increase and stat update)
-            // Only if the hunter hasn't been fed today and isn't in recovery
-            if (block.timestamp >= pos.lastFeedTime + 24 hours && 
-                (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
-                
-                uint128 currentPower = pos.power;
-                // Calculate additional power increase from feeding
-                uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
-                pos.power = currentPower + feedPowerIncrease;
-                
-                // Update feeding-related stats
-                pos.lastFeedTime = uint96(block.timestamp);
-                pos.missedFeedings = 0;
-            }
-        }
-    }
-    
-    /**
-     * @dev Hunt with multiple hunters at once from targets
-     * @param tokenIds Array of Hunter NFT IDs to use for hunting
+     * @dev Universal hunt function supporting single/multiple hunters and targets
+     * @param tokenIds Array of Hunter NFT IDs to use for hunting (can be single element)
      * @param targets Array of target addresses to hunt from (if empty, hunts from msg.sender)
      */
-    function huntWithMultipleHunters(uint256[] calldata tokenIds, address[] calldata targets) external nonReentrant {
+    function hunt(uint256[] calldata tokenIds, address[] calldata targets) external nonReentrant {
         if (tokenIds.length == 0) revert InvalidAmount();
         
-        // If no targets specified, hunt from msg.sender
+        // Prepare target addresses
         address[] memory huntTargets = new address[](targets.length == 0 ? 1 : targets.length);
         if (targets.length == 0) {
             huntTargets[0] = msg.sender;
@@ -502,57 +371,63 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
                 continue;
             }
             
-            // Track total hunted for this hunter
-            uint128 totalHuntedThisHunter = 0;
-            uint128 remainingPowerThisHunter = pos.power; // Each hunter has its own power limit
-            
-            // Hunt from all targets with this hunter
-            for (uint256 j = 0; j < huntTargets.length && remainingPowerThisHunter > 0; j++) {
-                address targetAddress = huntTargets[j];
+            // For single target mode (backwards compatibility)
+            if (huntTargets.length == 1) {
+                // Check if target address is protected
+                if (protectedAddresses[huntTargets[0]]) revert AddressIsProtected();
                 
-                // Skip protected addresses
-                if (protectedAddresses[targetAddress]) {
-                    continue;
-                }
+                // Single target hunt (old behavior)
+                _hunt(tokenId, huntTargets[0]);
+            } else {
+                // Multiple target hunt
+                uint128 totalHuntedThisHunter = 0;
+                uint128 remainingPowerThisHunter = pos.power;
                 
-                // Skip targets with zero balance
-                if (mimoToken.balanceOf(targetAddress) == 0) {
-                    continue;
-                }
-                
-                // Calculate how much to hunt from this target (limited by remaining power)
-                uint256 targetBalance = mimoToken.balanceOf(targetAddress);
-                uint128 huntAmount = remainingPowerThisHunter;
-                if (targetBalance < huntAmount) {
-                    huntAmount = uint128(targetBalance);
-                }
-                
-                if (huntAmount > 0) {
-                    // Hunt specific amount from this target
-                    uint128 huntedAmount = _huntSpecificAmount(tokenId, targetAddress, huntAmount);
-                    totalHuntedThisHunter += huntedAmount;
-                    remainingPowerThisHunter -= huntedAmount;
-                }
-            }
-            
-            // Update hunter stats if it actually hunted something
-            if (totalHuntedThisHunter > 0) {
-                pos.lastHuntTime = uint96(block.timestamp);
-                pos.totalHunted += totalHuntedThisHunter;
-                
-                // Auto-feed the hunter (power increase and stat update)
-                // Only if the hunter hasn't been fed today and isn't in recovery
-                if (block.timestamp >= pos.lastFeedTime + 24 hours && 
-                    (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
+                // Hunt from all targets with this hunter
+                for (uint256 j = 0; j < huntTargets.length && remainingPowerThisHunter > 0; j++) {
+                    address targetAddress = huntTargets[j];
                     
-                    uint128 currentPower = pos.power;
-                    // Calculate additional power increase from feeding
-                    uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
-                    pos.power = currentPower + feedPowerIncrease;
+                    // Skip protected addresses
+                    if (protectedAddresses[targetAddress]) {
+                        continue;
+                    }
                     
-                    // Update feeding-related stats
-                    pos.lastFeedTime = uint96(block.timestamp);
-                    pos.missedFeedings = 0;
+                    // Skip targets with zero balance
+                    if (mimoToken.balanceOf(targetAddress) == 0) {
+                        continue;
+                    }
+                    
+                    // Calculate how much to hunt from this target (limited by remaining power)
+                    uint256 targetBalance = mimoToken.balanceOf(targetAddress);
+                    uint128 huntAmount = remainingPowerThisHunter;
+                    if (targetBalance < huntAmount) {
+                        huntAmount = uint128(targetBalance);
+                    }
+                    
+                    if (huntAmount > 0) {
+                        // Hunt specific amount from this target
+                        uint128 huntedAmount = _huntSpecificAmount(tokenId, targetAddress, huntAmount);
+                        totalHuntedThisHunter += huntedAmount;
+                        remainingPowerThisHunter -= huntedAmount;
+                    }
+                }
+                
+                // Update hunter stats if it actually hunted something
+                if (totalHuntedThisHunter > 0) {
+                    pos.lastHuntTime = uint96(block.timestamp);
+                    pos.totalHunted += totalHuntedThisHunter;
+                    
+                    // Auto-feed the hunter (power increase and stat update)
+                    if (block.timestamp >= pos.lastFeedTime + 24 hours && 
+                        (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
+                        
+                        uint128 currentPower = pos.power;
+                        uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000);
+                        pos.power = currentPower + feedPowerIncrease;
+                        
+                        pos.lastFeedTime = uint96(block.timestamp);
+                        pos.missedFeedings = 0;
+                    }
                 }
             }
         }
@@ -789,22 +664,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     // ========================== CAVE FUNCTIONS ==========================
     
     /**
-     * @dev Deposit a BEAR NFT to receive MiMo tokens and a Hunter NFT
-     * @param bearId ID of the BEAR NFT to deposit
-     */
-    function depositBear(uint256 bearId) external nonReentrant whenNotPaused {
-        if (depositPaused) revert DepositPaused();
-        
-        // Call internal function to handle single deposit
-        _depositBear(bearId);
-    }
-    
-    /**
-     * @dev Deposit multiple BEAR NFTs at once to receive MiMo tokens and Hunter NFTs
-     * @param bearIds Array of BEAR NFT IDs to deposit
+     * @dev Deposit BEAR NFTs to receive MiMo tokens and Hunter NFTs (supports single or multiple)
+     * @param bearIds Array of BEAR NFT IDs to deposit (can be single element)
      * @return hunterIds Array of newly created Hunter NFT IDs
      */
-    function batchDepositBears(uint256[] calldata bearIds) external nonReentrant whenNotPaused returns (uint256[] memory) {
+    function depositBears(uint256[] calldata bearIds) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (depositPaused) revert DepositPaused();
         
         uint256 length = bearIds.length;
@@ -876,22 +740,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     }
     
     /**
-     * @dev Redeem MiMo tokens for a BEAR NFT
-     * @return bearId ID of the redeemed BEAR NFT
-     */
-    function redeemBear() external nonReentrant whenNotPaused returns (uint256) {
-        if (redemptionPaused) revert RedemptionPaused();
-        
-        // Use internal function to handle single redemption
-        return _redeemBear();
-    }
-    
-    /**
-     * @dev Redeem MiMo tokens for multiple BEAR NFTs at once
+     * @dev Redeem MiMo tokens for BEAR NFTs (supports single or multiple)
      * @param count Number of BEAR NFTs to redeem
      * @return bearIds Array of redeemed BEAR NFT IDs
      */
-    function batchRedeemBears(uint256 count) external nonReentrant whenNotPaused returns (uint256[] memory) {
+    function redeemBears(uint256 count) external nonReentrant whenNotPaused returns (uint256[] memory) {
         if (redemptionPaused) revert RedemptionPaused();
         if (count == 0) revert InvalidAmount();
         
@@ -906,7 +759,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         // Ensure BTBSwapLogic contract is configured
         _checkBTBSwapConfigured();
         
-        // Check if BTBSwapLogic contract has enough BEAR NFTs available, not this contract
+        // Check if BTBSwapLogic contract has enough BEAR NFTs available
         if (bearNFT.balanceOf(address(btbSwapContract)) < count) revert InsufficientNFTBalance();
         
         // Transfer fee to fee receiver (for all NFTs at once)
@@ -917,47 +770,25 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         uint256 totalBurnAmount = REDEMPTION_MIMO_AMOUNT * count;
         _mimoBurn(msg.sender, totalBurnAmount);
         
-        // Retrieve multiple BEAR NFTs from BTBSwapLogic and transfer to user
-        uint256[] memory bearIds = btbSwapContract.retrieveMultipleNFTsForRedemption(msg.sender, count);
+        // Retrieve BEAR NFTs from BTBSwapLogic
+        uint256[] memory bearIds;
+        if (count == 1) {
+            // Single redemption
+            bearIds = new uint256[](1);
+            bearIds[0] = btbSwapContract.retrieveAnyNFTForRedemption(msg.sender);
+        } else {
+            // Multiple redemption
+            bearIds = btbSwapContract.retrieveMultipleNFTsForRedemption(msg.sender, count);
+        }
         
         // Emit events for each NFT redeemed
-        uint256 totalAmount = totalAmountPerNFT; // Amount per NFT
         for (uint256 i = 0; i < count; i++) {
-            emit BearRedeemed(msg.sender, bearIds[i], totalAmount);
+            emit BearRedeemed(msg.sender, bearIds[i], totalAmountPerNFT);
         }
         
         return bearIds;
     }
     
-    /**
-     * @dev Internal function to redeem MiMo tokens for a BEAR NFT
-     * @return bearId ID of the redeemed BEAR NFT
-     */
-    function _redeemBear() internal returns (uint256) {
-        // Calculate total amount needed (base amount + fee)
-        uint256 feeAmount = (REDEMPTION_MIMO_AMOUNT * REDEMPTION_FEE_PERCENTAGE) / 100;
-        uint256 totalAmount = REDEMPTION_MIMO_AMOUNT + feeAmount;
-        
-        // Check if user has enough MiMo tokens
-        if (mimoToken.balanceOf(msg.sender) < totalAmount) revert InsufficientTokenBalance();
-        
-        // BTBSwapLogic contract must have BEAR NFTs available
-        _checkBTBSwapConfigured(); 
-        // No direct balance check here, retrieveAnyNFTForRedemption will handle it or revert
-        
-        // Transfer fee to fee receiver
-        _mimoTransfer(msg.sender, feeReceiver, feeAmount);
-        
-        // Burn the MIMO tokens
-        _mimoBurn(msg.sender, REDEMPTION_MIMO_AMOUNT);
-        
-        // Retrieve a BEAR NFT from BTBSwapLogic and transfer to user
-        uint256 bearId = btbSwapContract.retrieveAnyNFTForRedemption(msg.sender);
-        
-        emit BearRedeemed(msg.sender, bearId, totalAmount);
-        
-        return bearId;
-    }
     
     // ========================== BTB SWAP FUNCTIONS (DELEGATED) ==========================
     function _checkBTBSwapConfigured() internal view {
