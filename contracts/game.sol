@@ -452,6 +452,91 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     }
     
     /**
+     * @dev Hunt with multiple hunters at once from targets
+     * @param tokenIds Array of Hunter NFT IDs to use for hunting
+     * @param targets Array of target addresses to hunt from (if empty, hunts from msg.sender)
+     */
+    function huntWithMultipleHunters(uint256[] calldata tokenIds, address[] calldata targets) external nonReentrant {
+        if (tokenIds.length == 0) revert InvalidAmount();
+        
+        // If no targets specified, hunt from msg.sender
+        address[] memory huntTargets = new address[](targets.length == 0 ? 1 : targets.length);
+        if (targets.length == 0) {
+            huntTargets[0] = msg.sender;
+        } else {
+            for (uint256 i = 0; i < targets.length; i++) {
+                huntTargets[i] = targets[i] == address(0) ? msg.sender : targets[i];
+            }
+        }
+        
+        // Hunt with each hunter
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            
+            // Skip invalid tokens or tokens not owned by sender
+            if (!_exists(tokenId) || ownerOf(tokenId) != msg.sender) {
+                continue;
+            }
+            
+            // Check and update hibernation status before proceeding
+            _checkAndUpdateHibernation(tokenId);
+            
+            HunterPosition storage pos = positions[tokenId];
+            
+            // Skip if hunter is expired, hibernating, recovering, or on cooldown
+            if (block.timestamp > pos.creationTime + LIFESPAN || 
+                pos.inHibernation ||
+                (pos.recoveryStartTime > 0 && block.timestamp < pos.recoveryStartTime + RECOVERY_PERIOD) ||
+                block.timestamp < pos.lastHuntTime + HUNT_COOLDOWN) {
+                continue;
+            }
+            
+            // Track total hunted for this hunter
+            uint128 totalHuntedThisHunter = 0;
+            
+            // Hunt from all targets with this hunter
+            for (uint256 j = 0; j < huntTargets.length; j++) {
+                address targetAddress = huntTargets[j];
+                
+                // Skip protected addresses
+                if (protectedAddresses[targetAddress]) {
+                    continue;
+                }
+                
+                // Skip targets with zero balance
+                if (mimoToken.balanceOf(targetAddress) == 0) {
+                    continue;
+                }
+                
+                // Hunt from this target without updating cooldown
+                uint128 huntedAmount = _huntWithoutCooldownUpdate(tokenId, targetAddress);
+                totalHuntedThisHunter += huntedAmount;
+            }
+            
+            // Update hunter stats if it actually hunted something
+            if (totalHuntedThisHunter > 0) {
+                pos.lastHuntTime = uint96(block.timestamp);
+                pos.totalHunted += totalHuntedThisHunter;
+                
+                // Auto-feed the hunter (power increase and stat update)
+                // Only if the hunter hasn't been fed today and isn't in recovery
+                if (block.timestamp >= pos.lastFeedTime + 24 hours && 
+                    (pos.recoveryStartTime == 0 || block.timestamp >= pos.recoveryStartTime + RECOVERY_PERIOD)) {
+                    
+                    uint128 currentPower = pos.power;
+                    // Calculate additional power increase from feeding
+                    uint128 feedPowerIncrease = uint128((uint256(currentPower) * GROWTH_RATE) / 10000); // 2% from feeding
+                    pos.power = currentPower + feedPowerIncrease;
+                    
+                    // Update feeding-related stats
+                    pos.lastFeedTime = uint96(block.timestamp);
+                    pos.missedFeedings = 0;
+                }
+            }
+        }
+    }
+    
+    /**
      * @dev Internal function to hunt from a target without updating hunt cooldown
      * @param tokenId The Hunter NFT ID to use for hunting
      * @param targetAddress The target address to hunt from (already validated)
