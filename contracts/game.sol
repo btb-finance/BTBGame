@@ -80,6 +80,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     
     // BTBSwapLogic contract instance
     BTBSwapLogic public btbSwapContract;
+    
+    // Hunter NFT counter - prevents ID collisions when tokens are burned
+    uint256 private _nextHunterId = 1;
 
     // Events
     // MiMo Token events
@@ -717,7 +720,8 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
      * @dev Mint a new Hunter NFT
      */
     function _mintHunter(address to) internal returns (uint256) {
-        uint256 tokenId = totalSupply() + 1; 
+        uint256 tokenId = _nextHunterId;
+        _nextHunterId++; // Increment counter to prevent ID collisions
         
         // Initialize hunter position with base attributes
         // This will use the inherited positions mapping and constants from HunterStorage
@@ -737,6 +741,14 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         emit HunterCreated(tokenId, to, uint128(BASE_POWER)); // HunterCreated is from HunterStorage
         
         return tokenId;
+    }
+    
+    /**
+     * @dev Get the next Hunter ID that will be minted
+     * @return nextId The next Hunter NFT ID
+     */
+    function getNextHunterId() external view returns (uint256) {
+        return _nextHunterId;
     }
     
     /**
