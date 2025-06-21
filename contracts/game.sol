@@ -851,6 +851,11 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
         btbSwapContract.setAdminFeeShare(newAdminFeeShare);
     }
 
+    function setBuyPremium(uint256 newPremium) external onlyOwner {
+        _checkBTBSwapConfigured();
+        btbSwapContract.setBuyPremium(newPremium);
+    }
+
     // Liquidity management for BTBSwapLogic - to be added if BearHunterEcosystem manages it.
     // For now, BTBSwapLogic has its own withdraw functions for its owner (BearHunterEcosystem).
     // Example: ecosystem owner wants to pull funds from swap module

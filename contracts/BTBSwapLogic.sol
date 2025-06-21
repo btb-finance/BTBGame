@@ -27,6 +27,9 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     uint256 public swapFeePercentage = 100; // Default 1% (in basis points)
     uint256 public adminFeeShare = 5000;    // Default 50% of the fee (in basis points)
     bool public swapPausedState;             // Renamed from swapPaused to avoid conflict if main contract has one
+    
+    // Premium for buying NFTs - additional BTB tokens required per NFT
+    uint256 public buyPremium = 0;          // Default 0 = no premium
 
     // BTBSwap events
     event SwapBTBForNFTEvent(address indexed user, uint256 btbAmount, uint256[] nftIds);
@@ -36,6 +39,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     event AdminFeeShareUpdatedEvent(uint256 newAdminFeeShare);
     event FeesCollectedEvent(address indexed recipient, uint256 amount);
     event NFTDispensedForRedemption(address indexed recipient, uint256 tokenId);
+    event BuyPremiumUpdatedEvent(uint256 newPremium);
 
     constructor(address initialOwner, address _bearNFTAddress, address _btbTokenAddress, address _feeReceiverAddress) Ownable(initialOwner) {
         bearNFT = IERC721(_bearNFTAddress);
@@ -72,7 +76,8 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         if (totalNFTSupply <= nftsInContract) { // Prevents division by zero or negative
             return type(uint256).max; // Or handle appropriately
         }
-        return btbBalance / (totalNFTSupply - nftsInContract);
+        uint256 baseRate = btbBalance / (totalNFTSupply - nftsInContract);
+        return baseRate + buyPremium; // Add premium for buying NFTs
     }
 
     function swapBTBForNFT(address user, uint256 amount) external nonReentrant returns (uint256[] memory nftIds) {
@@ -269,6 +274,11 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         if (newAdminFeeShare > 10000) revert InvalidFeePercentage(); // Max 100% of the fee
         adminFeeShare = newAdminFeeShare;
         emit AdminFeeShareUpdatedEvent(newAdminFeeShare);
+    }
+
+    function setBuyPremium(uint256 newPremium) external onlyOwner {
+        buyPremium = newPremium;
+        emit BuyPremiumUpdatedEvent(newPremium);
     }
 
     // Function for the owner (BearHunterEcosystem) to withdraw collected BTB (not part of admin fee share)
