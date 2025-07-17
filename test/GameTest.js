@@ -46,6 +46,11 @@ describe("BEAR & Hunter Ecosystem Tests", function() {
     await mimoToken.transferOwnership(ecosystem.target);
     await ecosystem.initializeMiMoGameContract();
     
+    // Transfer BTBSwapLogic ownership to ecosystem contract
+    const btbSwapAddress = await ecosystem.btbSwapContract();
+    const btbSwapContract = await ethers.getContractAt("BTBSwapLogic", btbSwapAddress);
+    await btbSwapContract.transferOwnership(ecosystem.target);
+    
     // Mint some BEARs to users
     await bearNFT.safeMint(user1.address);
     await bearNFT.safeMint(user1.address);
@@ -148,6 +153,81 @@ describe("BEAR & Hunter Ecosystem Tests", function() {
       const stats2 = await ecosystem.getHunterStats(2);
       expect(stats1[3]).to.be.greaterThan(ethers.parseEther("20")); // Base power increased
       expect(stats2[3]).to.be.greaterThan(ethers.parseEther("20")); // Base power increased
+    });
+  });
+
+  describe("Redemption with Hunter Burning", function() {
+    it("Should require Hunter NFT to be burned for redemption", async function() {
+      // First deposit a BEAR to get a Hunter and MiMo tokens
+      await bearNFTUser1.approve(ecosystem.target, 1);
+      await ecosystemUser1.depositBears([1]);
+      
+      // Check initial balances
+      expect(await mimoToken.balanceOf(user1.address)).to.equal(ONE_MILLION_TOKENS);
+      expect(await ecosystem.ownerOf(1)).to.equal(user1.address);
+      expect(await ecosystem.balanceOf(user1.address)).to.equal(1);
+      
+      // Try to redeem without providing Hunter NFT (should fail because array length doesn't match)
+      await expect(ecosystemUser1.redeemBears(1, []))
+        .to.be.revertedWithCustomError(ecosystem, "InvalidAmount");
+      
+      // Add more MiMo tokens to cover the fee
+      await bearNFTUser1.approve(ecosystem.target, 2);
+      await ecosystemUser1.depositBears([2]);
+      
+      // Now user has 2M MiMo tokens and 2 Hunter NFTs
+      expect(await mimoToken.balanceOf(user1.address)).to.equal(ONE_MILLION_TOKENS * 2n);
+      expect(await ecosystem.balanceOf(user1.address)).to.equal(2);
+      
+      // Redeem 1 BEAR by providing 1 Hunter NFT to burn
+      await expect(ecosystemUser1.redeemBears(1, [1]))
+        .to.emit(ecosystem, "HunterBurnedForRedemption")
+        .withArgs(user1.address, 1, 1)
+        .and.to.emit(ecosystem, "BearRedeemed");
+      
+      // Check final balances
+      const finalMimoBalance = await mimoToken.balanceOf(user1.address);
+      const expectedBalance = ONE_MILLION_TOKENS * 2n - (ONE_MILLION_TOKENS + FEE_AMOUNT);
+      expect(finalMimoBalance).to.equal(expectedBalance);
+      
+      // Check Hunter NFT was burned (sent to burn address)
+      const burnAddress = "0x000000000000000000000000000000000000dEaD";
+      expect(await ecosystem.ownerOf(1)).to.equal(burnAddress);
+      expect(await ecosystem.balanceOf(user1.address)).to.equal(1); // Only 1 Hunter left
+      
+      // Check user received BEAR NFT back
+      expect(await bearNFT.ownerOf(1)).to.equal(user1.address);
+    });
+    
+    it("Should fail if user doesn't own the Hunter NFT", async function() {
+      // user1 deposits and gets Hunter NFT
+      await bearNFTUser1.approve(ecosystem.target, 1);
+      await ecosystemUser1.depositBears([1]);
+      
+      // user2 deposits to get enough MiMo tokens for redemption
+      await bearNFTUser2.approve(ecosystem.target, 3);
+      await ecosystemUser2.depositBears([3]);
+      
+      // user2 tries to redeem using user1's Hunter NFT (should fail)
+      await expect(ecosystemUser2.redeemBears(1, [1]))
+        .to.be.revertedWithCustomError(ecosystem, "NotHunterOwner");
+    });
+    
+    it("Should fail if Hunter NFT array length doesn't match count", async function() {
+      // user1 deposits and gets Hunter NFT
+      await bearNFTUser1.approve(ecosystem.target, 1);
+      await ecosystemUser1.depositBears([1]);
+      
+      // Try to redeem 1 BEAR but provide 0 Hunter NFTs
+      await expect(ecosystemUser1.redeemBears(1, []))
+        .to.be.revertedWithCustomError(ecosystem, "InvalidAmount");
+      
+      // Try to redeem 1 BEAR but provide 2 Hunter NFTs
+      await bearNFTUser1.approve(ecosystem.target, 2);
+      await ecosystemUser1.depositBears([2]);
+      
+      await expect(ecosystemUser1.redeemBears(1, [1, 2]))
+        .to.be.revertedWithCustomError(ecosystem, "InvalidAmount");
     });
   });
 });

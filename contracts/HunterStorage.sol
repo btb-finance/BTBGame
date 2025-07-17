@@ -22,7 +22,7 @@ contract HunterStorage {
     uint256 public constant LIFESPAN = 365 days;       // Hunter lifespan
     uint256 public constant MISSED_FEEDING_PENALTY = 30; // 30% power reduction after hibernation (percentage points)
     uint256 public constant HIBERNATION_THRESHOLD = 7;   // 7 missed feedings causes hibernation
-    uint256 public constant RECOVERY_PERIOD = 1 days;    // 24 hours to recover from hibernation
+    uint256 public constant RECOVERY_PERIOD = 7 days;    // 7 days Remaining to recover from hibernation
     uint256 public constant HUNT_COOLDOWN = 24 hours;    // Can hunt once every 24 hours
     uint256 public constant GROWTH_RATE = 200;          // 2% power increase for feeding (in basis points, e.g. 200 = 2%)
 
