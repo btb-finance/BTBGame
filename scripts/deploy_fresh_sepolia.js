@@ -130,7 +130,7 @@ async function main() {
     console.log("   ✅ BEAR NFTs approved for ecosystem");
     
     console.log("🔟 Testing deposit functionality for deployer...");
-    const depositTx1 = await ecosystem.depositBears([1, 2]);
+    const depositTx1 = await ecosystem["depositBears(uint256[])"]([1, 2]);
     const depositReceipt1 = await depositTx1.wait();
     console.log("   ✅ Deposited 2 BEAR NFTs (IDs: 1, 2) for deployer");
     

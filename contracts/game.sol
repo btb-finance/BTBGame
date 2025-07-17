@@ -702,7 +702,19 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
      * @return hunterIds Array of newly created Hunter NFT IDs
      */
     function depositBears(uint256[] calldata bearIds) external nonReentrant whenNotPaused returns (uint256[] memory) {
-        return this.depositBears(bearIds, msg.sender);
+        if (depositPaused) revert DepositPaused();
+        
+        uint256 length = bearIds.length;
+        if (length == 0) revert InvalidAmount();
+        
+        uint256[] memory hunterIds = new uint256[](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            // Process each deposit and capture the returned Hunter ID
+            hunterIds[i] = _depositBear(bearIds[i], msg.sender);
+        }
+        
+        return hunterIds;
     }
     
     /**
