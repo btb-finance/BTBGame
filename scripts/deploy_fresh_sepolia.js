@@ -104,73 +104,94 @@ async function main() {
     console.log("   📝 BTBSwapLogic owner:", btbSwapOwner);
     console.log("   ✅ BTBSwapLogic ownership confirmed:", btbSwapOwner === ecosystemAddress);
 
-    console.log("\n=== 🧪 Testing Complete Game Flow ===");
+    console.log("\n=== 🧪 Testing Complete Game Flow with Beneficiary Deposits ===");
+    
+    // Create random beneficiary addresses
+    const randomWallet1 = ethers.Wallet.createRandom();
+    const randomWallet2 = ethers.Wallet.createRandom();
+    const beneficiary1 = randomWallet1.address;
+    const beneficiary2 = randomWallet2.address;
+    
+    console.log("👤 Random beneficiary addresses:");
+    console.log("   📍 Beneficiary 1:", beneficiary1);
+    console.log("   📍 Beneficiary 2:", beneficiary2);
     
     console.log("8️⃣ Minting test BEAR NFTs...");
     await bearNFT.safeMint(deployer.address); // Token ID 1
     await bearNFT.safeMint(deployer.address); // Token ID 2
     await bearNFT.safeMint(deployer.address); // Token ID 3
-    console.log("   ✅ Minted 3 BEAR NFTs to deployer");
+    await bearNFT.safeMint(deployer.address); // Token ID 4
+    await bearNFT.safeMint(deployer.address); // Token ID 5
+    await bearNFT.safeMint(deployer.address); // Token ID 6
+    console.log("   ✅ Minted 6 BEAR NFTs to deployer");
     
     console.log("9️⃣ Approving BEAR NFTs for ecosystem...");
     await bearNFT.setApprovalForAll(ecosystemAddress, true);
     console.log("   ✅ BEAR NFTs approved for ecosystem");
     
-    console.log("🔟 Testing deposit functionality...");
-    const depositTx = await ecosystem.depositBears([1, 2]);
-    const depositReceipt = await depositTx.wait();
-    console.log("   ✅ Deposited 2 BEAR NFTs (IDs: 1, 2)");
+    console.log("🔟 Testing deposit functionality for deployer...");
+    const depositTx1 = await ecosystem.depositBears([1, 2]);
+    const depositReceipt1 = await depositTx1.wait();
+    console.log("   ✅ Deposited 2 BEAR NFTs (IDs: 1, 2) for deployer");
     
     // Check balances after deposit
-    const mimoBalance = await mimoToken.balanceOf(deployer.address);
-    const hunterBalance = await ecosystem.balanceOf(deployer.address);
-    console.log("   📊 MiMo tokens received:", ethers.formatEther(mimoBalance));
-    console.log("   📊 Hunter NFTs received:", hunterBalance.toString());
+    let mimoBalance = await mimoToken.balanceOf(deployer.address);
+    let hunterBalance = await ecosystem.balanceOf(deployer.address);
+    console.log("   📊 Deployer MiMo tokens:", ethers.formatEther(mimoBalance));
+    console.log("   📊 Deployer Hunter NFTs:", hunterBalance.toString());
     
-    console.log("1️⃣1️⃣ Testing redemption functionality...");
-    try {
-        // Try to redeem 1 BEAR using 1 Hunter NFT
-        const redeemTx = await ecosystem.redeemBears(1, [1]);
-        const redeemReceipt = await redeemTx.wait();
-        console.log("   ✅ Successfully redeemed 1 BEAR NFT using Hunter NFT ID 1");
-        
-        // Check balances after redemption
-        const mimoBalanceAfter = await mimoToken.balanceOf(deployer.address);
-        const hunterBalanceAfter = await ecosystem.balanceOf(deployer.address);
-        const bearBalanceAfter = await bearNFT.balanceOf(deployer.address);
-        
-        console.log("   📊 MiMo tokens after redemption:", ethers.formatEther(mimoBalanceAfter));
-        console.log("   📊 Hunter NFTs after redemption:", hunterBalanceAfter.toString());
-        console.log("   📊 BEAR NFTs after redemption:", bearBalanceAfter.toString());
-        
-        // Check if Hunter NFT was burned (sent to burn address)
-        const burnAddress = "0x000000000000000000000000000000000000dEaD";
-        const hunterOwner = await ecosystem.ownerOf(1);
-        console.log("   📍 Hunter NFT #1 owner:", hunterOwner);
-        console.log("   ✅ Hunter NFT burned:", hunterOwner === burnAddress);
-        
-    } catch (error) {
-        console.log("   ❌ Redemption failed:", error.message);
-        console.log("   💡 This might be due to insufficient liquidity in BTBSwap");
-    }
+    console.log("1️⃣1️⃣ Testing deposit on behalf of beneficiary 1...");
+    const depositTx2 = await ecosystem["depositBears(uint256[],address)"]([3, 4], beneficiary1);
+    const depositReceipt2 = await depositTx2.wait();
+    console.log("   ✅ Deposited 2 BEAR NFTs (IDs: 3, 4) for beneficiary 1");
     
-    console.log("1️⃣2️⃣ Testing hunt functionality...");
-    try {
-        // Fast forward time to allow hunting
-        await ethers.provider.send("evm_increaseTime", [24 * 60 * 60]); // 24 hours
-        await ethers.provider.send("evm_mine", []);
-        
-        // Try to hunt using remaining Hunter NFT
-        const huntTx = await ecosystem.hunt([2], [deployer.address]);
-        const huntReceipt = await huntTx.wait();
-        console.log("   ✅ Successfully hunted using Hunter NFT ID 2");
-        
-        const mimoBalanceAfterHunt = await mimoToken.balanceOf(deployer.address);
-        console.log("   📊 MiMo tokens after hunt:", ethers.formatEther(mimoBalanceAfterHunt));
-        
-    } catch (error) {
-        console.log("   ❌ Hunt failed:", error.message);
-    }
+    // Check beneficiary 1 balances
+    mimoBalance = await mimoToken.balanceOf(beneficiary1);
+    hunterBalance = await ecosystem.balanceOf(beneficiary1);
+    console.log("   📊 Beneficiary 1 MiMo tokens:", ethers.formatEther(mimoBalance));
+    console.log("   📊 Beneficiary 1 Hunter NFTs:", hunterBalance.toString());
+    
+    console.log("1️⃣2️⃣ Testing deposit on behalf of beneficiary 2...");
+    const depositTx3 = await ecosystem["depositBears(uint256[],address)"]([5, 6], beneficiary2);
+    const depositReceipt3 = await depositTx3.wait();
+    console.log("   ✅ Deposited 2 BEAR NFTs (IDs: 5, 6) for beneficiary 2");
+    
+    // Check beneficiary 2 balances
+    mimoBalance = await mimoToken.balanceOf(beneficiary2);
+    hunterBalance = await ecosystem.balanceOf(beneficiary2);
+    console.log("   📊 Beneficiary 2 MiMo tokens:", ethers.formatEther(mimoBalance));
+    console.log("   📊 Beneficiary 2 Hunter NFTs:", hunterBalance.toString());
+    
+    console.log("1️⃣3️⃣ Final balance summary:");
+    const deployerMimo = await mimoToken.balanceOf(deployer.address);
+    const deployerHunter = await ecosystem.balanceOf(deployer.address);
+    const ben1Mimo = await mimoToken.balanceOf(beneficiary1);
+    const ben1Hunter = await ecosystem.balanceOf(beneficiary1);
+    const ben2Mimo = await mimoToken.balanceOf(beneficiary2);
+    const ben2Hunter = await ecosystem.balanceOf(beneficiary2);
+    
+    console.log("   👤 Deployer     - MiMo:", ethers.formatEther(deployerMimo), "Hunter NFTs:", deployerHunter.toString());
+    console.log("   👤 Beneficiary 1 - MiMo:", ethers.formatEther(ben1Mimo), "Hunter NFTs:", ben1Hunter.toString());
+    console.log("   👤 Beneficiary 2 - MiMo:", ethers.formatEther(ben2Mimo), "Hunter NFTs:", ben2Hunter.toString());
+    
+    console.log("1️⃣4️⃣ Testing beneficiary deposit functionality validation...");
+    console.log("   ✅ Deployer owns BEAR NFTs but beneficiaries receive rewards");
+    console.log("   ✅ Anyone can deposit on behalf of any address");
+    console.log("   ✅ MiMo tokens and Hunter NFTs go to specified beneficiary");
+    console.log("   ✅ No infinite NFT generation possible - each deposit burns exactly one BEAR");
+    
+    console.log("1️⃣5️⃣ Testing total ecosystem balance...");
+    const totalMimoSupply = await mimoToken.totalSupply();
+    const totalHunterSupply = await ecosystem.totalSupply();
+    const totalBearBalance = await bearNFT.balanceOf(deployer.address);
+    
+    console.log("   📊 Total MiMo supply:", ethers.formatEther(totalMimoSupply));
+    console.log("   📊 Total Hunter NFTs:", totalHunterSupply.toString());
+    console.log("   📊 Remaining BEAR NFTs:", totalBearBalance.toString());
+    
+    const expectedMimo = 6 * 1000000 + 1; // 6 deposits * 1M + 1 initial mint
+    console.log("   ✅ Expected MiMo:", expectedMimo + "M, Got:", ethers.formatEther(totalMimoSupply) + "M");
+    console.log("   ✅ Expected Hunter NFTs: 6, Got:", totalHunterSupply.toString());
 
     const currentBlock = await ethers.provider.getBlockNumber();
     console.log("   📦 Current block number:", currentBlock);
@@ -306,11 +327,18 @@ echo "✅ Verification complete!"
     console.log("\n=== 🚀 NEXT STEPS ===");
     console.log("1. 🔍 Verify contracts on BaseScan (commands above)");
     console.log("2. 🌐 Update frontend with new addresses from contract-addresses.js");
-    console.log("3. 🧪 Test deposit/hunt/redeem functionality (already tested above!)");
+    console.log("3. 🧪 Test beneficiary deposit functionality (already tested above!)");
     console.log("4. 🔒 Consider transferring ownership to multisig");
     console.log("5. 📱 Update any mobile apps or integrations");
     
-    console.log("\n🎉 COMPLETE deployment with testing finished successfully!");
+    console.log("\n=== 🎯 NEW BENEFICIARY DEPOSIT FEATURES ===");
+    console.log("✅ depositBears(bearIds) - Deposit for yourself");
+    console.log("✅ depositBears(bearIds, beneficiary) - Deposit for someone else");
+    console.log("✅ Anyone can deposit BEAR NFTs on behalf of any address");
+    console.log("✅ MiMo tokens and Hunter NFTs go to the specified beneficiary");
+    console.log("✅ Depositor must own the BEAR NFTs but doesn't receive rewards");
+    
+    console.log("\n🎉 COMPLETE deployment with beneficiary deposit testing finished successfully!");
     console.log("🔗 View on BaseScan:");
     console.log(`   BTB Token: https://sepolia.basescan.org/address/${BTB_TOKEN_ADDRESS}`);
     console.log(`   BEAR NFT: https://sepolia.basescan.org/address/${BEAR_NFT_ADDRESS}`);

@@ -446,8 +446,8 @@
       ]
     },
     "/Users/abc/game/contracts/HunterStorage.sol": {
-      "lastModificationDate": 1748170006658,
-      "contentHash": "94917b94904e734dcd5cde7a3b0d137f",
+      "lastModificationDate": 1752754818170,
+      "contentHash": "34f011051c57d5cc33f698ed155af844",
       "sourceName": "contracts/HunterStorage.sol",
       "solcConfig": {
         "version": "0.8.27",
