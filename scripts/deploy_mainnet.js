@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-    console.log("🚀 Starting MAINNET deployment...");
+    console.log("🚀 Starting BASE MAINNET deployment...");
     console.log("🔄 Using existing BTB Token and BEAR NFT contracts");
     
     const [deployer] = await ethers.getSigners();
@@ -113,8 +113,8 @@ async function main() {
     // Get current block number
     const blockNumber = await ethers.provider.getBlockNumber();
     
-    console.log("\n=== 🎉 MAINNET DEPLOYMENT SUMMARY ===");
-    console.log("🌐 Network: Ethereum Mainnet (Chain ID: 1)");
+    console.log("\n=== 🎉 BASE MAINNET DEPLOYMENT SUMMARY ===");
+    console.log("🌐 Network: Base Mainnet (Chain ID: 8453)");
     console.log("👤 Deployer:", deployer.address);
     console.log("🪙 BTB Token (EXISTING):", BTB_TOKEN_ADDRESS);
     console.log("🐻 BEAR NFT (EXISTING):", BEAR_NFT_ADDRESS);
@@ -127,8 +127,8 @@ async function main() {
 
     // Save deployment info
     const deploymentInfo = {
-        network: "mainnet",
-        chainId: 1,
+        network: "baseMainnet",
+        chainId: 8453,
         deployer: deployer.address,
         contracts: {
             BTB_TOKEN_ADDRESS: BTB_TOKEN_ADDRESS,
@@ -173,7 +173,7 @@ async function main() {
     console.log("📄 ./scripts/mainnet_deployment.json (deployment details)");
 
     // Generate contract addresses for frontend
-    const contractAddresses = `// Ethereum Mainnet Contract Addresses
+    const contractAddresses = `// Base Mainnet Contract Addresses
 // Generated on ${new Date().toISOString()}
 // Block: ${blockNumber}
 
@@ -184,10 +184,10 @@ export const ECOSYSTEM_ADDRESS = '${ECOSYSTEM_ADDRESS}';
 export const BTBSWAP_ADDRESS = '${BTBSWAP_ADDRESS}';
 
 export const NETWORK_CONFIG = {
-    chainId: 1,
-    name: 'Ethereum Mainnet',
-    rpcUrl: 'https://mainnet.infura.io/v3/YOUR_PROJECT_ID',
-    blockExplorer: 'https://etherscan.io'
+    chainId: 8453,
+    name: 'Base Mainnet',
+    rpcUrl: 'https://mainnet.base.org',
+    blockExplorer: 'https://basescan.org'
 };
 
 export const ADDRESSES = {
@@ -206,19 +206,19 @@ export const DEPLOYMENT_BLOCK = ${blockNumber};
 
     // Generate verification script
     const verificationScript = `#!/bin/bash
-# Verification script for Ethereum Mainnet deployment
+# Verification script for Base Mainnet deployment
 # Generated on ${new Date().toISOString()}
 
-echo "🔍 Starting contract verification on Etherscan..."
+echo "🔍 Starting contract verification on BaseScan..."
 
 echo "1️⃣ Verifying MiMoGaMe token..."
-npx hardhat verify --network mainnet ${MIMO_TOKEN_ADDRESS} "${deployer.address}" "${initialOwner}"
+npx hardhat verify --network base ${MIMO_TOKEN_ADDRESS} "${deployer.address}" "${initialOwner}"
 
 echo "2️⃣ Verifying BearHunterEcosystem..."
-npx hardhat verify --network mainnet ${ECOSYSTEM_ADDRESS} "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${MIMO_TOKEN_ADDRESS}" "${liquidityReceiver}" "${feeReceiver}" "${initialOwner}"
+npx hardhat verify --network base ${ECOSYSTEM_ADDRESS} "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${MIMO_TOKEN_ADDRESS}" "${liquidityReceiver}" "${feeReceiver}" "${initialOwner}"
 
 echo "3️⃣ Verifying BTBSwapLogic..."
-npx hardhat verify --network mainnet ${BTBSWAP_ADDRESS} "${initialOwner}" "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${feeReceiver}"
+npx hardhat verify --network base ${BTBSWAP_ADDRESS} "${initialOwner}" "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${feeReceiver}"
 
 echo "✅ Verification complete!"
 `;
@@ -231,12 +231,12 @@ echo "✅ Verification complete!"
     console.log("🔍 Run verification script:");
     console.log("   ./scripts/verify-mainnet.sh");
     console.log("\n🔍 Or verify manually:");
-    console.log(`   npx hardhat verify --network mainnet ${MIMO_TOKEN_ADDRESS} "${deployer.address}" "${initialOwner}"`);
-    console.log(`   npx hardhat verify --network mainnet ${ECOSYSTEM_ADDRESS} "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${MIMO_TOKEN_ADDRESS}" "${liquidityReceiver}" "${feeReceiver}" "${initialOwner}"`);
-    console.log(`   npx hardhat verify --network mainnet ${BTBSWAP_ADDRESS} "${initialOwner}" "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${feeReceiver}"`);
+    console.log(`   npx hardhat verify --network base ${MIMO_TOKEN_ADDRESS} "${deployer.address}" "${initialOwner}"`);
+    console.log(`   npx hardhat verify --network base ${ECOSYSTEM_ADDRESS} "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${MIMO_TOKEN_ADDRESS}" "${liquidityReceiver}" "${feeReceiver}" "${initialOwner}"`);
+    console.log(`   npx hardhat verify --network base ${BTBSWAP_ADDRESS} "${initialOwner}" "${BEAR_NFT_ADDRESS}" "${BTB_TOKEN_ADDRESS}" "${feeReceiver}"`);
 
     console.log("\n=== 🚀 NEXT STEPS ===");
-    console.log("1. 🔍 Verify contracts on Etherscan (commands above)");
+    console.log("1. 🔍 Verify contracts on BaseScan (commands above)");
     console.log("2. 🌐 Update frontend with new addresses from mainnet-addresses.js");
     console.log("3. ⚠️  IMPORTANT: Update BTB Token and BEAR NFT ownership if needed");
     console.log("4. 🔒 Consider transferring ownership to multisig");
@@ -251,13 +251,13 @@ echo "✅ Verification complete!"
     console.log("   - BTB Token: CHECK MANUALLY");
     console.log("   - BEAR NFT: CHECK MANUALLY");
 
-    console.log("\n🎉 MAINNET deployment completed successfully!");
-    console.log("🔗 View contracts on Etherscan:");
-    console.log("   MiMoGaMe: https://etherscan.io/address/" + MIMO_TOKEN_ADDRESS);
-    console.log("   Ecosystem: https://etherscan.io/address/" + ECOSYSTEM_ADDRESS);
-    console.log("   BTBSwapLogic: https://etherscan.io/address/" + BTBSWAP_ADDRESS);
-    console.log("   BTB Token: https://etherscan.io/address/" + BTB_TOKEN_ADDRESS);
-    console.log("   BEAR NFT: https://etherscan.io/address/" + BEAR_NFT_ADDRESS);
+    console.log("\n🎉 BASE MAINNET deployment completed successfully!");
+    console.log("🔗 View contracts on BaseScan:");
+    console.log("   MiMoGaMe: https://basescan.org/address/" + MIMO_TOKEN_ADDRESS);
+    console.log("   Ecosystem: https://basescan.org/address/" + ECOSYSTEM_ADDRESS);
+    console.log("   BTBSwapLogic: https://basescan.org/address/" + BTBSWAP_ADDRESS);
+    console.log("   BTB Token: https://basescan.org/address/" + BTB_TOKEN_ADDRESS);
+    console.log("   BEAR NFT: https://basescan.org/address/" + BEAR_NFT_ADDRESS);
 }
 
 main()

@@ -23,11 +23,20 @@ module.exports = {
       chainId: 84532,
       gasLimit: 30000000,
       allowUnlimitedContractSize: true
+
+    },
+    base: {
+      url: "https://mainnet.base.org",
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 8453,
+      gasLimit: 30000000,
+      allowUnlimitedContractSize: true
     }
   },
   etherscan: {
     apiKey: {
-      baseSepolia: process.env.BASESCAN_API
+      baseSepolia: process.env.BASESCAN_API,
+      base: process.env.BASESCAN_API
     },
     customChains: [
       {
@@ -36,6 +45,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-sepolia.basescan.org/api",
           browserURL: "https://sepolia.basescan.org"
+        }
+      },
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
         }
       }
     ]
