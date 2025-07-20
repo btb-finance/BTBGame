@@ -1,5 +1,6 @@
 /** @type import('hardhat/config').HardhatUserConfig */
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 module.exports = {
   solidity: {
@@ -18,7 +19,7 @@ module.exports = {
     },
     baseSepolia: {
       url: "https://sepolia.base.org",
-      accounts: ["0x89266ff69e24130a10d24dfb80316a2c6f3e2304345e8796aa820a3a19f27589"],
+      accounts: [process.env.PRIVATE_KEY],
       chainId: 84532,
       gasLimit: 30000000,
       allowUnlimitedContractSize: true
@@ -26,7 +27,7 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      baseSepolia: "9XI8M8BCN6M6UISZWA68BKTJIKHUWAXNS3"
+      baseSepolia: process.env.BASESCAN_API
     },
     customChains: [
       {

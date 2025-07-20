@@ -83,7 +83,7 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
     BTBSwapLogic public btbSwapContract;
     
     // Burn address for Hunter NFTs during redemption
-    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
+    address public constant BURN_ADDRESS = 0x0000000000000000000000000000000000000000;
     
     // Hunter NFT counter - prevents ID collisions when tokens are burned
     uint256 private _nextHunterId = 1;
@@ -832,9 +832,9 @@ contract BearHunterEcosystem is ERC721, ERC721URIStorage, ERC721Enumerable, ERC7
             bearIds = btbSwapContract.retrieveMultipleNFTsForRedemption(msg.sender, count);
         }
         
-        // Burn Hunter NFTs by transferring to burn address
+        // Burn Hunter NFTs - use _burn instead of _transfer to address(0)
         for (uint256 i = 0; i < count; i++) {
-            _transfer(msg.sender, BURN_ADDRESS, hunterIds[i]);
+            _burn(hunterIds[i]);
             emit HunterBurnedForRedemption(msg.sender, hunterIds[i], bearIds[i]);
         }
         

@@ -7,6 +7,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
+/**
+ * @title BTBSwapLogic
+ * @dev BEAR-BTB Token swap logic contract for BearHunterEcosystem
+ * @notice Game Version: 0.9.2
+ */
 contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     IERC721 public bearNFT;
     IERC20 public btbToken;
@@ -616,5 +621,13 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         
         emit SwapNFTForBTBEvent(user, tokenIds, btbAmountToUser);
         return (tokenIds, btbAmountToUser, nextTokenId);
+    }
+
+    /**
+     * @dev Returns the game version
+     * @return Game version string
+     */
+    function getGameVersion() public pure returns (string memory) {
+        return "0.9.2";
     }
 } 

@@ -8,6 +8,11 @@ import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC2
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+/**
+ * @title MiMoGaMe Token
+ * @dev ERC20 token with advanced features for BearHunterEcosystem
+ * @notice Game Version: 0.9.2
+ */
 contract MiMoGaMe is ERC20, ERC20Burnable, Ownable, ERC1363, ERC20Permit {
     address public gameContractAddress;
 
@@ -50,5 +55,13 @@ contract MiMoGaMe is ERC20, ERC20Burnable, Ownable, ERC1363, ERC20Permit {
      */
     function forceBurnFrom(address from, uint256 amount) external onlyGameContract {
         _burn(from, amount);
+    }
+
+    /**
+     * @dev Returns the game version
+     * @return Game version string
+     */
+    function getGameVersion() public pure returns (string memory) {
+        return "0.9.2";
     }
 }
