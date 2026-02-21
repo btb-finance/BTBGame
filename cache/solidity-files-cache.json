@@ -2015,52 +2015,6 @@
         "ERC2981"
       ]
     },
-    "/Users/abc/game/contracts/nft.sol": {
-      "lastModificationDate": 1771672140662,
-      "contentHash": "ab01b9e1694048e417693b04128c41c3",
-      "sourceName": "contracts/nft.sol",
-      "solcConfig": {
-        "version": "0.8.27",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 1
-          },
-          "viaIR": true,
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol",
-        "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol",
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.27"
-      ],
-      "artifacts": [
-        "BearNFT"
-      ]
-    },
     "/Users/abc/game/contracts/btbtoken.sol": {
       "lastModificationDate": 1752752884747,
       "contentHash": "5db641ae3ec46ecaa8005ae47b5cf2e3",
@@ -3260,6 +3214,172 @@
       ],
       "artifacts": [
         "BTBSwapLogicProxy"
+      ]
+    },
+    "/Users/abc/game/contracts/PixelCatsFullOnChain.sol": {
+      "lastModificationDate": 1771672930795,
+      "contentHash": "07e4a5170c8a443f361ff0a73313fd77",
+      "sourceName": "contracts/PixelCatsFullOnChain.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol",
+        "@openzeppelin/contracts/utils/Base64.sol",
+        "@openzeppelin/contracts/utils/Strings.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "IPixelCatsRenderer",
+        "PixelCatsFullOnChainV2"
+      ]
+    },
+    "/Users/abc/game/contracts/proxies/PixelCatsRendererProxy.sol": {
+      "lastModificationDate": 1771673010092,
+      "contentHash": "b6faaab4ed6f03f0999fb719e0e16a95",
+      "sourceName": "contracts/proxies/PixelCatsRendererProxy.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "PixelCatsRendererProxy"
+      ]
+    },
+    "/Users/abc/game/contracts/proxies/PixelCatsFullOnChainProxy.sol": {
+      "lastModificationDate": 1771673009238,
+      "contentHash": "f003e5eeb2f47f0a60f5ed94a794d3e3",
+      "sourceName": "contracts/proxies/PixelCatsFullOnChainProxy.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "PixelCatsFullOnChainProxy"
+      ]
+    },
+    "/Users/abc/game/contracts/PixelCatsRenderer.sol": {
+      "lastModificationDate": 1771673004098,
+      "contentHash": "7be2b3d56780dd0f245146364cdcfc71",
+      "sourceName": "contracts/PixelCatsRenderer.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 1
+          },
+          "viaIR": true,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/Strings.sol",
+        "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol",
+        "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "PixelCatsRenderer"
       ]
     }
   }
