@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
-// Compatible with OpenZeppelin Contracts ^5.0.0
 pragma solidity ^0.8.27;
 
-import {ERC1363} from "@openzeppelin/contracts/token/ERC20/extensions/ERC1363.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {ERC20BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import {ERC20PermitUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /**
  * @title MiMoGaMe Token
  * @dev ERC20 token with advanced features for BearHunterEcosystem
  * @notice Game Version: 0.9.2
  */
-contract MiMoGaMe is ERC20, ERC20Burnable, Ownable, ERC1363, ERC20Permit {
+contract MiMoGaMe is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, OwnableUpgradeable, ERC20PermitUpgradeable, UUPSUpgradeable {
     address public gameContractAddress;
 
     event GameContractAddressSet(address indexed newGameContractAddress);
@@ -23,13 +23,21 @@ contract MiMoGaMe is ERC20, ERC20Burnable, Ownable, ERC1363, ERC20Permit {
         _;
     }
 
-    constructor(address recipient, address initialOwner)
-        ERC20("MiMo GaMe", "MiMo")
-        Ownable(initialOwner)
-        ERC20Permit("MiMo GaMe")
-    {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address recipient, address initialOwner) public initializer {
+        __ERC20_init("MiMo GaMe", "MiMo");
+        __ERC20Burnable_init();
+        __ERC20Permit_init("MiMo GaMe");
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
         _mint(recipient, 1 * 10 ** decimals());
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function mint(address to, uint256 amount) public onlyOwner {
         _mint(to, amount);

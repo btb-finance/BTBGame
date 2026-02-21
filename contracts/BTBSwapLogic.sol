@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 /**
@@ -12,7 +14,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
  * @dev BEAR-BTB Token swap logic contract for BearHunterEcosystem
  * @notice Game Version: 0.9.2
  */
-contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
+contract BTBSwapLogic is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, IERC721Receiver {
     IERC721 public bearNFT;
     IERC20 public btbToken;
     address public feeReceiver; // For admin fees from swaps
@@ -29,12 +31,12 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     error NotBearNFT(); // For onERC721Received check
 
     // BTBSwap Variables
-    uint256 public swapFeePercentage = 100; // Default 1% (in basis points)
-    uint256 public adminFeeShare = 5000;    // Default 50% of the fee (in basis points)
+    uint256 public swapFeePercentage; // Default 1% (in basis points)
+    uint256 public adminFeeShare;    // Default 50% of the fee (in basis points)
     bool public swapPausedState;             // Renamed from swapPaused to avoid conflict if main contract has one
-    
+
     // Premium for buying NFTs - additional BTB tokens required per NFT
-    uint256 public buyPremium = 0;          // Default 0 = no premium
+    uint256 public buyPremium;          // Default 0 = no premium
 
     // BTBSwap events
     event SwapBTBForNFTEvent(address indexed user, uint256 btbAmount, uint256[] nftIds);
@@ -46,11 +48,30 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     event NFTDispensedForRedemption(address indexed recipient, uint256 tokenId);
     event BuyPremiumUpdatedEvent(uint256 newPremium);
 
-    constructor(address initialOwner, address _bearNFTAddress, address _btbTokenAddress, address _feeReceiverAddress) Ownable(initialOwner) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address initialOwner,
+        address _bearNFTAddress,
+        address _btbTokenAddress,
+        address _feeReceiverAddress
+    ) public initializer {
+        __Ownable_init(initialOwner);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
         bearNFT = IERC721(_bearNFTAddress);
         btbToken = IERC20(_btbTokenAddress);
         feeReceiver = _feeReceiverAddress;
+        swapFeePercentage = 100; // Default 1% (in basis points)
+        adminFeeShare = 5000;    // Default 50% of the fee (in basis points)
+        buyPremium = 0;          // Default 0 = no premium
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function setAddresses(address _bearNFTAddress, address _btbTokenAddress, address _feeReceiverAddress) external onlyOwner {
         bearNFT = IERC721(_bearNFTAddress);
@@ -116,12 +137,12 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
 
         // Find available NFT IDs using more efficient tracking
         nftIds = findAvailableNFTs(amount);
-        
+
         // Transfer all NFTs to user
         for (uint256 i = 0; i < amount; i++) {
             bearNFT.safeTransferFrom(address(this), user, nftIds[i]);
         }
-        
+
         emit SwapBTBForNFTEvent(user, totalAmount, nftIds);
         return nftIds;
     }
@@ -138,7 +159,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 revert InsufficientNFTBalance(); // Should use a more specific error like NFTNotApproved
             }
         }
-        
+
         // Calculate payment amount
         uint256 swapRate = getSwapRate();
         if (swapRate == 0 || swapRate == type(uint256).max) revert InvalidAmount();
@@ -168,11 +189,11 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 }
             }
         }
-        
+
         emit SwapNFTForBTBEvent(user, tokenIds, btbAmountToUser);
         return btbAmountToUser;
     }
-    
+
     /**
      * @dev Find the specified number of NFTs that the contract owns
      * @param count Number of NFTs to find
@@ -181,11 +202,11 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     function findAvailableNFTs(uint256 count) private view returns (uint256[] memory nftIds) {
         nftIds = new uint256[](count);
         uint256 found = 0;
-        
+
         // Store the last checked token ID to optimize future searches
         uint256 startTokenId = 1; // Start from ID 1
         uint256 searchLimit = 10000; // Maximum range to search to prevent gas issues
-        
+
         // Find 'count' NFTs owned by this contract
         for (uint256 i = startTokenId; found < count && i < startTokenId + searchLimit; i++) {
             try bearNFT.ownerOf(i) returns (address owner) {
@@ -197,13 +218,13 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 continue;
             }
         }
-        
+
         // Make sure we found enough NFTs
         if (found < count) revert InsufficientNFTBalance();
-        
+
         return nftIds;
     }
-    
+
     /**
      * @dev Get available NFT IDs for informational purposes (e.g., for frontend)
      * @param limit Maximum number of NFT IDs to return
@@ -222,25 +243,25 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     ) {
         // Get total NFTs owned by this contract
         totalAvailable = bearNFT.balanceOf(address(this));
-        
+
         // Cap limit for gas efficiency
         if (limit == 0) {
             limit = 50; // Default to 50 NFTs
         } else if (limit > 100) {
             limit = 100; // Cap at 100 NFTs max to prevent gas issues
         }
-        
+
         // Start from at least token ID 1
         if (startId == 0) {
             startId = 1;
         }
-        
+
         // Find the specified number of NFTs
         nftIds = new uint256[](limit);
         uint256 found = 0;
         uint256 searchLimit = 10000; // Limit the search range to prevent gas issues
         nextStartId = startId; // Initialize to current start
-        
+
         for (uint256 i = startId; found < limit && i < startId + searchLimit; i++) {
             try bearNFT.ownerOf(i) returns (address owner) {
                 if (owner == address(this)) {
@@ -252,14 +273,14 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
             }
             nextStartId = i + 1; // Update the next start ID
         }
-        
+
         // If we didn't find enough NFTs to fill the array, resize it
         if (found < limit) {
             assembly {
                 mstore(nftIds, found) // Resize the array to actual found length
             }
         }
-        
+
         return (nftIds, totalAvailable, nextStartId);
     }
 
@@ -294,7 +315,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         bool success = btbToken.transfer(to, amount);
         if(!success) revert TransferFailed();
     }
-    
+
     // Function for the owner (BearHunterEcosystem) to withdraw specific NFTs if needed
     function withdrawBearNFTs(address to, uint256[] calldata tokenIds) external onlyOwner {
         require(to != address(0), "Zero address");
@@ -306,12 +327,12 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
 
     // Function for BearHunterEcosystem (owner) to retrieve an NFT for user redemption
     function retrieveAnyNFTForRedemption(address recipient) external onlyOwner nonReentrant returns (uint256 tokenId) {
-        if (recipient == address(0)) revert InvalidAmount(); 
-        
+        if (recipient == address(0)) revert InvalidAmount();
+
         uint256 balance = bearNFT.balanceOf(address(this));
         if (balance == 0) revert NoNFTsAvailableForRedemption();
 
-        for (uint256 i = 1; i <= 100000; i++) { 
+        for (uint256 i = 1; i <= 100000; i++) {
             try bearNFT.ownerOf(i) returns (address owner) {
                 if (owner == address(this)) {
                     tokenId = i;
@@ -323,9 +344,9 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 continue;
             }
         }
-        revert NoNFTsAvailableForRedemption(); 
+        revert NoNFTsAvailableForRedemption();
     }
-    
+
     /**
      * @dev Retrieve multiple NFTs for redemption in a single transaction
      * @param recipient Address to receive the NFTs
@@ -338,13 +359,13 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     ) external onlyOwner nonReentrant returns (uint256[] memory tokenIds) {
         if (recipient == address(0)) revert InvalidAmount();
         if (count == 0) revert InvalidAmount();
-        
+
         uint256 balance = bearNFT.balanceOf(address(this));
         if (balance < count) revert NoNFTsAvailableForRedemption();
-        
+
         tokenIds = new uint256[](count);
         uint256 found = 0;
-        
+
         // Find 'count' NFTs owned by this contract
         for (uint256 i = 1; found < count && i <= 100000; i++) {
             try bearNFT.ownerOf(i) returns (address owner) {
@@ -356,16 +377,16 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 continue;
             }
         }
-        
+
         // Make sure we found enough NFTs
         if (found < count) revert NoNFTsAvailableForRedemption();
-        
+
         // Transfer all NFTs in a single loop
         for (uint256 i = 0; i < count; i++) {
             bearNFT.safeTransferFrom(address(this), recipient, tokenIds[i]);
             emit NFTDispensedForRedemption(recipient, tokenIds[i]);
         }
-        
+
         return tokenIds;
     }
 
@@ -382,7 +403,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         // Check if the received NFT is the configured bearNFT contract
         // msg.sender in this context is the NFT contract calling this hook
         if (msg.sender != address(bearNFT)) {
-            revert NotBearNFT(); 
+            revert NotBearNFT();
         }
         // Further checks can be added here if needed, e.g., based on `data` or `operator`
         // For now, just accepting the configured bearNFT is sufficient for its role as a liquidity pool
@@ -402,10 +423,10 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         if (swapPausedState) revert SwapPaused();
         uint256 length = specificTokenIds.length;
         if (length == 0) revert InvalidAmount();
-        
+
         // Limit batch size to prevent gas issues
         if (length > 100) revert InvalidAmount();
-        
+
         // Validate contract owns all specified NFTs
         for (uint256 i = 0; i < length; i++) {
             try bearNFT.ownerOf(specificTokenIds[i]) returns (address owner) {
@@ -416,7 +437,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 revert InsufficientNFTBalance();
             }
         }
-        
+
         // Calculate cost
         uint256 swapRate = getSwapRate();
         if (swapRate == 0 || swapRate == type(uint256).max) revert InvalidAmount();
@@ -424,15 +445,15 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         uint256 feeAmount = (baseAmount * swapFeePercentage) / 10000;
         totalCost = baseAmount + feeAmount;
         uint256 adminFeeAmount = (feeAmount * adminFeeShare) / 10000;
-        
+
         // Validate user has enough tokens and allowance
         if (btbToken.balanceOf(user) < totalCost) revert InsufficientTokenBalance();
         if (btbToken.allowance(user, address(this)) < totalCost) revert InsufficientTokenAllowance();
-        
+
         // Execute token transfer first - security best practice
         bool success = btbToken.transferFrom(user, address(this), totalCost);
         if (!success) revert TransferFailed();
-        
+
         // Transfer admin fee if applicable
         if (adminFeeAmount > 0 && feeReceiver != address(0)) {
             success = btbToken.transfer(feeReceiver, adminFeeAmount);
@@ -440,12 +461,12 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 emit FeesCollectedEvent(feeReceiver, adminFeeAmount);
             }
         }
-        
+
         // Transfer all NFTs to user
         for (uint256 i = 0; i < length; i++) {
             bearNFT.safeTransferFrom(address(this), user, specificTokenIds[i]);
         }
-        
+
         emit SwapBTBForNFTEvent(user, totalCost, specificTokenIds);
         return totalCost;
     }
@@ -463,14 +484,14 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         // This is a more gas-efficient version of swapBTBForNFT for large batches
         if (swapPausedState) revert SwapPaused();
         if (amount == 0) revert InvalidAmount();
-        
+
         // Cap amount to prevent gas issues
         if (amount > 100) {
             amount = 100;
         }
-        
+
         if (bearNFT.balanceOf(address(this)) < amount) revert InsufficientNFTBalance();
-        
+
         // Calculate cost in one go
         uint256 swapRate = getSwapRate();
         if (swapRate == 0 || swapRate == type(uint256).max) revert InvalidAmount();
@@ -478,28 +499,28 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
         uint256 feeAmount = (baseAmount * swapFeePercentage) / 10000;
         uint256 totalAmount = baseAmount + feeAmount;
         uint256 adminFeeAmount = (feeAmount * adminFeeShare) / 10000;
-        
+
         // Check user balances and transfer tokens
         if (btbToken.balanceOf(user) < totalAmount) revert InsufficientTokenBalance();
         if (btbToken.allowance(user, address(this)) < totalAmount) revert InsufficientTokenAllowance();
-        
+
         bool success = btbToken.transferFrom(user, address(this), totalAmount);
         if (!success) revert TransferFailed();
-        
+
         // Process admin fee
         if (adminFeeAmount > 0 && feeReceiver != address(0)) {
             btbToken.transfer(feeReceiver, adminFeeAmount);
             emit FeesCollectedEvent(feeReceiver, adminFeeAmount);
         }
-        
+
         // Find available NFTs with limited search range
         nftIds = findAvailableNFTs(amount);
-        
+
         // Transfer NFTs to user in a batch loop
         for (uint256 i = 0; i < amount; i++) {
             bearNFT.safeTransferFrom(address(this), user, nftIds[i]);
         }
-        
+
         emit SwapBTBForNFTEvent(user, totalAmount, nftIds);
         return nftIds;
     }
@@ -526,47 +547,47 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     ) {
         if (swapPausedState) revert SwapPaused();
         if (maxNFTs == 0) revert InvalidAmount();
-        
+
         // Cap maxNFTs to prevent gas issues
         if (maxNFTs > 100) {
             maxNFTs = 100;
         }
-        
+
         // Count how many NFTs the user owns (up to maxNFTs)
         uint256 userNFTBalance = bearNFT.balanceOf(user);
         uint256 nftsToSwap = userNFTBalance < maxNFTs ? userNFTBalance : maxNFTs;
         if (nftsToSwap == 0) revert InsufficientNFTBalance();
-        
+
         // Make sure the contract can see the user's NFTs (approval check)
         // This assumes the user has approved all their NFTs to this contract
         if (!bearNFT.isApprovedForAll(user, address(this))) {
             revert InsufficientNFTBalance(); // Better error would be "NFTNotApproved"
         }
-        
+
         // Calculate swap amounts
         uint256 swapRate = getSwapRate();
         if (swapRate == 0 || swapRate == type(uint256).max) revert InvalidAmount();
         uint256 baseAmount = swapRate * nftsToSwap;
         uint256 feeAmount = (baseAmount * swapFeePercentage) / 10000;
         btbAmountToUser = baseAmount - feeAmount;
-        
+
         // Enforce minimum received amount (slippage protection)
         if (btbAmountToUser < minBTBAmount) revert InvalidAmount();
-        
+
         // Ensure the contract has enough BTB tokens
         if (btbToken.balanceOf(address(this)) < btbAmountToUser) revert InsufficientTokenBalance();
-        
+
         // Start from at least token ID 1
         if (startTokenId == 0) {
             startTokenId = 1;
         }
-        
+
         // Find NFTs owned by the user (up to nftsToSwap)
         tokenIds = new uint256[](nftsToSwap);
         uint256 found = 0;
         uint256 searchLimit = 10000; // Limit the search range to prevent gas issues
         nextTokenId = startTokenId; // Initialize to current start
-        
+
         // Find NFTs owned by the user
         for (uint256 i = startTokenId; found < nftsToSwap && i < startTokenId + searchLimit; i++) {
             try bearNFT.ownerOf(i) returns (address owner) {
@@ -579,7 +600,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
             }
             nextTokenId = i + 1; // Update next token ID for pagination
         }
-        
+
         // If we didn't find enough NFTs to fill the array, resize it
         if (found < nftsToSwap) {
             // Resize the array to actual found length
@@ -587,12 +608,12 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 mstore(tokenIds, found)
             }
         }
-        
+
         // Transfer all NFTs to this contract
         for (uint256 i = 0; i < found; i++) {
             bearNFT.safeTransferFrom(user, address(this), tokenIds[i]);
         }
-        
+
         // Recalculate based on actual NFTs transferred
         if (found < nftsToSwap) {
             // Recalculate amounts based on actual tokens transferred
@@ -600,14 +621,14 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
             feeAmount = (baseAmount * swapFeePercentage) / 10000;
             btbAmountToUser = baseAmount - feeAmount;
         }
-        
+
         // Ensure we still meet minimum amount
         if (btbAmountToUser < minBTBAmount) revert InvalidAmount();
-        
+
         // Transfer BTB tokens to the user
         bool success = btbToken.transfer(user, btbAmountToUser);
         if (!success) revert TransferFailed();
-        
+
         // Process admin fee
         uint256 adminFeeAmount = (feeAmount * adminFeeShare) / 10000;
         if (adminFeeAmount > 0 && feeReceiver != address(0)) {
@@ -618,7 +639,7 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
                 }
             }
         }
-        
+
         emit SwapNFTForBTBEvent(user, tokenIds, btbAmountToUser);
         return (tokenIds, btbAmountToUser, nextTokenId);
     }
@@ -630,4 +651,4 @@ contract BTBSwapLogic is Ownable, ReentrancyGuard, IERC721Receiver {
     function getGameVersion() public pure returns (string memory) {
         return "0.9.2";
     }
-} 
+}
